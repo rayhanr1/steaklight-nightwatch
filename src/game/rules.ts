@@ -217,3 +217,16 @@ export function hitBlock(hp: number) {
   return Math.max(0, hp - 1);
 }
 export const RESOURCE_MAX_ON_SCREEN = 3;
+
+// ---------- Score ----------
+export const SCORE_PER_LEVEL = 100;
+export const SCORE_PER_KILL = 10;
+export const SCORE_PER_STEAK = 5;
+export type HighScore = { score: number; level: number };
+export function runScore(levelsCleared: number, kills: number, steaks: number) {
+  return levelsCleared * SCORE_PER_LEVEL + kills * SCORE_PER_KILL + steaks * SCORE_PER_STEAK;
+}
+/** Keeps the best score and best level reached, independently. */
+export function mergeHighScore(prev: HighScore, run: HighScore): HighScore {
+  return { score: Math.max(prev.score, run.score), level: Math.max(prev.level, run.level) };
+}

@@ -104,3 +104,14 @@ describe("game rules", () => {
     expect(m.x).toBeGreaterThan(W); // left through the right edge after bouncing right, then left
   });
 });
+
+import { mergeHighScore, runScore } from "@/game/rules";
+describe("high score", () => {
+  it("scores 100 per level cleared, 10 per mob, 5 per steak", () => {
+    expect(runScore(2, 3, 4)).toBe(250);
+  });
+  it("only replaces the high score when beaten", () => {
+    expect(mergeHighScore({ score: 300, level: 3 }, { score: 120, level: 2 })).toEqual({ score: 300, level: 3 });
+    expect(mergeHighScore({ score: 300, level: 3 }, { score: 450, level: 4 })).toEqual({ score: 450, level: 4 });
+  });
+});

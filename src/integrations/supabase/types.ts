@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      high_scores: {
+        Row: {
+          best_level: number
+          best_score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          best_level?: number
+          best_score?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          best_level?: number
+          best_score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_games: {
         Row: {
           snapshot: Json

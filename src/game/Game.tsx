@@ -6,6 +6,9 @@ import { HeartsRow } from "./PixelHeart";
 import { PixelSlider } from "./PixelSlider";
 import {
   applyContact,
+  mergeHighScore,
+  runScore,
+  type HighScore,
   ARROW_SPEED,
   BLOCK_DURABILITY,
   BLOCK_SIZE,
@@ -122,6 +125,41 @@ export function Game() {
   const [banner, setBanner] = useState<{ text: string; sub: string; key: number } | null>(null);
   const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0, wood: 0, stone: 0, iron: 0, kills: 0 });
   const keys = useRef(new Set<string>());
+  const [best, setBest] = useState<HighScore>({ score: 0, level: 0 });
+  const [lastScore, setLastScore] = useState(0);
+  const [newBest, setNewBest] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("high-score") ?? "null");
+      if (raw && typeof raw.score === "number" && typeof raw.level === "number") setBest((b) => mergeHighScore(b, raw));
+    } catch { /* ignore corrupt local score */ }
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    void supabase.from("high_scores").select("best_score, best_level").eq("user_id", userId).maybeSingle().then(({ data }) => {
+      if (data) setBest((b) => mergeHighScore(b, { score: data.best_score, level: data.best_level }));
+    });
+  }, [userId]);
+
+  // Record the run's score whenever a level ends or the game is lost.
+  useEffect(() => {
+    if (phase !== "levelComplete" && phase !== "gameOver") return;
+    const w = world.current;
+    const cleared = phase === "levelComplete" ? w.level : w.level - 1;
+    const run = { score: runScore(cleared, w.kills, w.steaksEaten), level: w.level };
+    setLastScore(run.score);
+    setBest((prev) => {
+      const next = mergeHighScore(prev, run);
+      setNewBest(run.score > prev.score);
+      if (next.score !== prev.score || next.level !== prev.level) {
+        localStorage.setItem("high-score", JSON.stringify(next));
+        if (userId) void supabase.from("high_scores").upsert({ user_id: userId, best_score: next.score, best_level: next.level, updated_at: new Date().toISOString() });
+      }
+      return next;
+    });
+  }, [phase, userId]);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setUserId(session?.user.id ?? null));
@@ -715,6 +753,7 @@ export function Game() {
           <p className="mt-2 text-center text-2xl leading-tight text-muted-foreground">
             Eat steaks and gather blocks by day. Fight or wall off the mobs by night.
           </p>
+          {best.score > 0 && <p className="mt-3 text-center font-display text-[10px] text-accent">High score {best.score} · Best level {best.level}</p>}
           {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full rounded-none py-3"><Play /> Continue saved game · Level {saved.world.level}</Button>}
           {!userId && <Button variant="ghost" onClick={async () => {
             const result = await lovable.auth.signInWithOAuth("lovable", { redirect_uri: window.location.origin });
@@ -770,6 +809,9 @@ export function Game() {
             <HeartsRow hearts={hud.hearts} />
           </div>
           <p className="mt-5 text-center text-xl leading-tight text-muted-foreground">
+            Score: {lastScore}{newBest ? " · New high score!" : ""} · Best: {best.score}
+          </p>
+          <p className="mt-2 text-center text-xl leading-tight text-muted-foreground">
             Mobs defeated: {hud.kills}. Next night: {nextNight}s with more, faster mobs{hud.level === 1 ? " and zombies" : hud.level === 2 ? " and spiders" : ""}.
           </p>
           <button autoFocus onClick={nextLevel} className="pixel-button mt-6 w-full px-6 py-4 text-sm uppercase">
@@ -786,6 +828,10 @@ export function Game() {
           <p className="mt-3 text-center text-2xl text-muted-foreground">
             You fell on level {hud.level} after eating {hud.steaks} steaks.
           </p>
+          <p className="mt-2 text-center text-2xl text-accent">
+            Score: {lastScore}{newBest ? " · New high score!" : ""}
+          </p>
+          <p className="text-center text-xl text-muted-foreground">High score: {best.score} · Best level: {best.level}</p>
           <button autoFocus onClick={toMenu} className="pixel-button mt-6 w-full px-6 py-4 text-sm uppercase">
             New game
           </button>
