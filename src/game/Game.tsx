@@ -7,10 +7,26 @@ import { HeartsRow } from "./PixelHeart";
 import { PixelSlider } from "./PixelSlider";
 import {
   applyContact,
+  ARROW_SPEED,
+  BLOCK_DURABILITY,
+  BLOCK_SIZE,
+  CREEPER_BLAST_RADIUS,
+  CREEPER_FUSE_RANGE,
+  CREEPER_FUSE_SECONDS,
+  hitBlock,
+  mobKindsForLevel,
+  RESOURCE_MAX_ON_SCREEN,
+  resourceKindsForLevel,
+  SKELETON_SHOOT_EVERY,
+  steerToward,
+  SWORD_COOLDOWN,
+  SWORD_SWING_SECONDS,
+  swordHits,
+  type BlockKind,
+  type MobKind,
   DEFAULT_SETTINGS,
   ENEMY_MAX_BOUNCES,
   levelConfig,
-  NIGHT_GROWTH_SECONDS,
   overlaps,
   spawnMover,
   STARTING_HEARTS,
@@ -30,8 +46,10 @@ import { lovable } from "@/integrations/lovable";
 import { captureProgress, progressSchema, simulationDelta, type Progress } from "./progress";
 
 type Phase = "menu" | "day" | "night" | "levelComplete" | "gameOver";
-type EnemyKind = "skeleton" | "creeper";
-type Enemy = Mover & { kind: EnemyKind; bob: number };
+type Enemy = Mover & { kind: MobKind; bob: number; timer: number; fuse: number };
+type Resource = Mover & { kind: BlockKind };
+type Block = { x: number; y: number; w: number; h: number; kind: BlockKind; hp: number };
+type Arrow = { x: number; y: number; w: number; h: number; vx: number; vy: number };
 type Steak = Mover & { spin: number };
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string };
 type Floater = { x: number; y: number; text: string; life: number; color: string };
@@ -48,6 +66,14 @@ export type World = {
   steve: { x: number; y: number; w: number; h: number; facing: 1 | -1; hurt: number; walk: number };
   steaks: Steak[];
   enemies: Enemy[];
+  resources: Resource[];
+  blocks: Block[];
+  arrows: Arrow[];
+  inventory: Record<BlockKind, number>;
+  swing: number;
+  swingCooldown: number;
+  resourceTimer: number;
+  kills: number;
   particles: Particle[];
   floaters: Floater[];
   flashes: Flash[];
@@ -58,7 +84,7 @@ export type World = {
   pointer: { x: number; y: number } | null;
 };
 
-type Hud = { hearts: number; level: number; timeLeft: number; total: number; steaks: number };
+type Hud = { hearts: number; level: number; timeLeft: number; total: number; steaks: number; wood: number; stone: number; iron: number; kills: number };
 
 const STEVE_SPEED = 330;
 // In-game art colors (canvas), not UI theme colors.
@@ -66,6 +92,10 @@ const FX = {
   steak: ["#f5c16b", "#ffe9a8", "#c8742e"],
   bone: ["#e8e8e8", "#bdbdbd", "#8f8f8f"],
   boom: ["#ffffff", "#f6d36b", "#f08a2a", "#6b6b6b", "#3c3c3c"],
+  mob: ["#5cb83a", "#3a302a", "#d21f1f", "#3f6e30"],
+  wood: ["#b8894c", "#9a6f38", "#6e4c22"],
+  stone: ["#8d8d8d", "#6f6f6f", "#4f4f4f"],
+  iron: ["#d8d8d8", "#bcbcbc", "#8a8a8a"],
 };
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -91,7 +121,7 @@ export function Game() {
   const [phase, setPhase] = useState<Phase>("menu");
   const [night, setNight] = useState(false);
   const [banner, setBanner] = useState<{ text: string; sub: string; key: number } | null>(null);
-  const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0 });
+  const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0, wood: 0, stone: 0, iron: 0, kills: 0 });
   const keys = useRef(new Set<string>());
 
   useEffect(() => {
@@ -123,6 +153,14 @@ export function Game() {
     steve: { x: 600, y: 320, w: SPRITE_SIZE.steve.w, h: SPRITE_SIZE.steve.h, facing: 1, hurt: 0, walk: 0 },
     steaks: [],
     enemies: [],
+    resources: [],
+    blocks: [],
+    arrows: [],
+    inventory: { wood: 0, stone: 0, iron: 0 },
+    swing: 0,
+    swingCooldown: 0,
+    resourceTimer: 1,
+    kills: 0,
     particles: [],
     floaters: [],
     flashes: [],
@@ -169,14 +207,8 @@ export function Game() {
     const w = world.current;
     const total = w.phase === "night" ? w.cfg.nightDuration : w.cfg.dayDuration;
     setHud((prev) => {
-      const next = { hearts: w.hearts, level: w.level, timeLeft: Math.ceil(w.timeLeft), total, steaks: w.steaksEaten };
-      return prev.hearts === next.hearts &&
-        prev.level === next.level &&
-        prev.timeLeft === next.timeLeft &&
-        prev.total === next.total &&
-        prev.steaks === next.steaks
-        ? prev
-        : next;
+      const next: Hud = { hearts: w.hearts, level: w.level, timeLeft: Math.ceil(w.timeLeft), total, steaks: w.steaksEaten, ...w.inventory, kills: w.kills };
+      return (Object.keys(next) as (keyof Hud)[]).every((k) => prev[k] === next[k]) ? prev : next;
     });
   }, []);
 
@@ -198,10 +230,14 @@ export function Game() {
     w.timeLeft = w.cfg.dayDuration;
     w.steaks = [];
     w.enemies = [];
+    w.resources = [];
+    w.blocks = [];
+    w.arrows = [];
     w.particles = [];
     w.floaters = [];
     w.flashes = [];
     w.steakTimer = 0.3;
+    w.resourceTimer = 0.8;
     w.steve.x = w.W / 2 - w.steve.w / 2;
     w.steve.y = w.H / 2 - w.steve.h / 2;
     w.steve.hurt = 0;
@@ -215,10 +251,11 @@ export function Game() {
     const w = world.current;
     for (const s of w.steaks) burst(w, s.x + s.w / 2, s.y + s.h / 2, FX.steak, 6, 80);
     w.steaks = [];
+    w.resources = [];
     w.timeLeft = w.cfg.nightDuration;
     w.enemyTimer = 0.8;
     setNight(true);
-    showBanner("Night falls", "Avoid the mobs!");
+    showBanner("Night falls", "Space to swing · 1/2/3 to place blocks");
     go("night");
   }, [go]);
 
@@ -228,6 +265,8 @@ export function Game() {
     w.level = 1;
     w.hearts = STARTING_HEARTS;
     w.steaksEaten = 0;
+    w.kills = 0;
+    w.inventory = { wood: 0, stone: 0, iron: 0 };
     startDay();
   }, [settings, startDay]);
 
@@ -250,7 +289,7 @@ export function Game() {
   const restoreProgress = useCallback((snapshot: Progress) => {
     const W = world.current.W, H = world.current.H;
     const restored = structuredClone(snapshot.world);
-    for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
+    for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.resources, ...restored.blocks, ...restored.arrows, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
       object.x *= W / restored.W;
       object.y *= H / restored.H;
     }
@@ -287,6 +326,13 @@ export function Game() {
         return;
       }
       if (pausedRef.current) return;
+      if (p === "day" || p === "night") {
+        const w = world.current;
+        if (e.key === " " && !e.repeat) { e.preventDefault(); swingSword(w); return; }
+        const place: Record<string, BlockKind> = { "1": "wood", z: "wood", "2": "stone", x: "stone", "3": "iron", c: "iron" };
+        const kind = place[e.key.toLowerCase()];
+        if (kind && !e.repeat) { e.preventDefault(); placeBlock(w, kind); return; }
+      }
       if (MOVE.includes(e.key) && (p === "day" || p === "night")) {
         e.preventDefault();
         keys.current.add(e.key.toLowerCase());
@@ -398,6 +444,8 @@ export function Game() {
       s.x = Math.max(0, Math.min(w.W - s.w, s.x));
       s.y = Math.max(0, Math.min(w.H - s.h, s.y));
       s.hurt = Math.max(0, s.hurt - dt);
+      w.swing = Math.max(0, w.swing - dt);
+      w.swingCooldown = Math.max(0, w.swingCooldown - dt);
 
       w.timeLeft -= dt;
 
@@ -419,37 +467,114 @@ export function Game() {
           }
           return true;
         });
+        w.resourceTimer -= dt;
+        if (w.resourceTimer <= 0 && w.resources.length < RESOURCE_MAX_ON_SCREEN) {
+          w.resourceTimer = rnd(1.2, 2.2);
+          const m = spawnMover(w.W, w.H, 32, 32, rnd(110, 180), Math.floor(rnd(1, 4)));
+          w.resources.push({ ...m, kind: pick(resourceKindsForLevel(w.level)) });
+        }
+        w.resources = w.resources.filter((r) => {
+          if (!stepMover(r, dt, w.W, w.H)) return false;
+          if (overlaps(s, r, 0.1)) {
+            w.inventory[r.kind] += 1;
+            burst(w, r.x + 16, r.y + 16, FX[r.kind], 8, 140);
+            w.floaters.push({ x: r.x, y: r.y, text: `+1 ${r.kind}`, life: 0.9, color: "#f0f0f0" });
+            return false;
+          }
+          return true;
+        });
         if (w.timeLeft <= 0) startNight();
       } else {
         w.enemyTimer -= dt;
         if (w.enemyTimer <= 0) {
           w.enemyTimer = w.cfg.enemySpawnInterval * rnd(0.8, 1.2);
+          const kinds = mobKindsForLevel(w.level);
           for (let i = 0; i < w.cfg.enemiesPerWave; i++) {
-            const kind: EnemyKind = Math.random() < 0.6 ? "skeleton" : "creeper";
-            const m = spawnMover(w.W, w.H, 32, 64, w.cfg.enemySpeed * rnd(0.85, 1.15), ENEMY_MAX_BOUNCES);
-            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2) });
+            const kind = pick(kinds);
+            const size = SPRITE_SIZE[kind];
+            const m = spawnMover(w.W, w.H, size.w, size.h, w.cfg.enemySpeed * rnd(0.85, 1.15), ENEMY_MAX_BOUNCES);
+            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2), timer: rnd(1, SKELETON_SHOOT_EVERY), fuse: 0 });
           }
         }
+        const scx = s.x + s.w / 2, scy = s.y + s.h / 2;
+        const hurt = (kind: Parameters<typeof applyContact>[1], x: number, y: number) => {
+          w.hearts = applyContact(w.hearts, kind);
+          s.hurt = 0.6;
+          w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
+        };
         w.enemies = w.enemies.filter((e) => {
-          if (!stepMover(e, dt, w.W, w.H)) return false;
-          if (overlaps(s, e)) {
-            const cx = e.x + e.w / 2,
-              cy = e.y + e.h / 2;
-            w.hearts = applyContact(w.hearts, e.kind);
-            s.hurt = 0.6;
-            if (e.kind === "creeper") {
-              burst(w, cx, cy, FX.boom, 46, 380);
-              w.flashes.push({ x: cx, y: cy, life: 0.45, max: 0.45 });
-              w.shake = 14;
-              w.floaters.push({ x: cx - 10, y: e.y, text: "-1", life: 1, color: "#ff5a4a" });
-            } else {
-              burst(w, cx, cy, FX.bone, 18, 200);
-              w.shake = 6;
-              w.floaters.push({ x: cx - 10, y: e.y, text: "-½", life: 1, color: "#ff5a4a" });
+          const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+          const speed = w.cfg.enemySpeed;
+          if (e.entered && e.kind === "creeper") {
+            const d = Math.hypot(scx - cx, scy - cy);
+            if (e.fuse > 0 || d < CREEPER_FUSE_RANGE) {
+              e.fuse += dt;
+              e.vx *= 0.9; e.vy *= 0.9;
+              if (e.fuse >= CREEPER_FUSE_SECONDS) {
+                explode(w, cx, cy);
+                if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y);
+                for (const b of w.blocks) if (Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy) < CREEPER_BLAST_RADIUS) b.hp = hitBlock(b.hp);
+                return false;
+              }
+            } else steerToward(e, scx, scy, speed * 0.9, 1.2, dt);
+          } else if (e.entered && e.kind === "zombie") {
+            steerToward(e, scx, scy, speed * 0.75, 2, dt);
+          } else if (e.entered && e.kind === "spider") {
+            e.timer -= dt;
+            if (e.timer <= 0) {
+              e.timer = rnd(1.8, 2.8);
+              const d = Math.hypot(scx - cx, scy - cy) || 1;
+              e.vx = ((scx - cx) / d) * speed * 2.6;
+              e.vy = ((scy - cy) / d) * speed * 2.6;
+            } else if (Math.hypot(e.vx, e.vy) > speed * 1.05) { e.vx *= 1 - dt * 1.5; e.vy *= 1 - dt * 1.5; }
+          } else if (e.entered && e.kind === "skeleton") {
+            e.timer -= dt;
+            if (e.timer <= 0) {
+              e.timer = SKELETON_SHOOT_EVERY * rnd(0.8, 1.2);
+              const d = Math.hypot(scx - cx, scy - cy) || 1;
+              w.arrows.push({ x: cx, y: cy, w: 6, h: 6, vx: ((scx - cx) / d) * ARROW_SPEED, vy: ((scy - cy) / d) * ARROW_SPEED });
             }
+          }
+          if (!stepMover(e, dt, w.W, w.H)) return false;
+          // Placed blocks stop mobs and take a hit.
+          for (const b of w.blocks) {
+            if (b.hp > 0 && overlaps(e, b, 0.05)) {
+              b.hp = hitBlock(b.hp);
+              burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 10, 150);
+              if (e.kind === "creeper") { explode(w, cx, cy); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
+              const ox = cx - (b.x + b.w / 2), oy = cy - (b.y + b.h / 2);
+              if (Math.abs(ox) / (e.w + b.w) > Math.abs(oy) / (e.h + b.h)) { e.vx = Math.sign(ox || 1) * Math.abs(e.vx || speed); e.x += Math.sign(ox || 1) * 8; }
+              else { e.vy = Math.sign(oy || 1) * Math.abs(e.vy || speed); e.y += Math.sign(oy || 1) * 8; }
+              if (e.kind === "spider") e.timer = Math.max(e.timer, 1.2);
+              break;
+            }
+          }
+          if (w.swing > 0 && swordHits(s, s.facing, e)) {
+            w.kills += 1;
+            burst(w, cx, cy, e.kind === "skeleton" ? FX.bone : FX.mob, 16, 220);
+            w.floaters.push({ x: cx - 10, y: e.y, text: "POW", life: 0.7, color: "#ffe066" });
+            return false;
+          }
+          if (e.kind !== "creeper" && overlaps(s, e)) {
+            hurt(e.kind, cx, e.y);
+            burst(w, cx, cy, e.kind === "skeleton" ? FX.bone : FX.mob, 18, 200);
+            w.shake = 6;
             return false;
           }
           return true;
+        });
+        w.arrows = w.arrows.filter((ar) => {
+          ar.x += ar.vx * dt; ar.y += ar.vy * dt;
+          if (ar.x < -20 || ar.y < -20 || ar.x > w.W + 20 || ar.y > w.H + 20) return false;
+          if (w.swing > 0 && swordHits(s, s.facing, ar)) return false;
+          for (const b of w.blocks) if (b.hp > 0 && overlaps(ar, b, 0)) { b.hp = hitBlock(b.hp); burst(w, ar.x, ar.y, FX[b.kind], 6, 100); return false; }
+          if (overlaps(s, ar, 0.15)) { hurt("arrow", ar.x, ar.y); w.shake = 4; return false; }
+          return true;
+        });
+        w.blocks = w.blocks.filter((b) => {
+          if (b.hp > 0) return true;
+          burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 18, 220);
+          return false;
         });
         if (w.hearts <= 0) {
           go("gameOver");
@@ -458,6 +583,8 @@ export function Game() {
         if (w.timeLeft <= 0) {
           for (const e of w.enemies) burst(w, e.x + e.w / 2, e.y + e.h / 2, FX.bone, 6, 100);
           w.enemies = [];
+          w.arrows = [];
+          w.blocks = [];
           go("levelComplete");
         }
       }
@@ -549,6 +676,14 @@ export function Game() {
               <span className="font-display text-[10px] text-foreground">{hud.hearts.toFixed(1)}</span>
             </div>
             <HeartsRow hearts={hud.hearts} />
+            <div className="mt-3 flex gap-3 font-display text-[10px] text-foreground">
+              {(["wood", "stone", "iron"] as const).map((k, i) => (
+                <span key={k} className="flex items-center gap-1" title={`${k} (press ${i + 1})`}>
+                  <span className={cn("inline-block h-4 w-4 border-2 border-border", k === "wood" ? "bg-block-wood" : k === "stone" ? "bg-block-stone" : "bg-block-iron")} />
+                  {i + 1}:{hud[k]}
+                </span>
+              ))}
+            </div>
           </div>
           <div className="pixel-panel absolute right-4 top-4 w-56 px-4 py-3">
             <div className="flex items-center justify-between">
@@ -582,7 +717,7 @@ export function Game() {
             Steak &amp; Survive
           </h1>
           <p className="mt-2 text-center text-2xl leading-tight text-muted-foreground">
-            Eat steaks by day. Dodge skeletons and creepers by night.
+            Eat steaks and gather blocks by day. Fight or wall off the mobs by night.
           </p>
           {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full rounded-none py-3"><Play /> Continue saved game · Level {saved.world.level}</Button>}
           {!userId && <Button variant="ghost" onClick={async () => {
@@ -613,8 +748,8 @@ export function Game() {
             <PixelSlider
               label="Night length"
               value={settings.nightDuration}
-              min={20}
-              max={180}
+              min={15}
+              max={30}
               step={5}
               format={(v) => `${v}s`}
               onChange={(v) => setSettings((s) => ({ ...s, nightDuration: v }))}
@@ -624,7 +759,7 @@ export function Game() {
             Start new game
           </button>
           <p className="mt-4 text-center text-xl leading-tight text-muted-foreground">
-            Arrow keys or WASD to move · tap and hold on touch screens
+            Arrows/WASD move · Space swings sword · 1/2/3 place wood/stone/iron where you stand
           </p>
         </Overlay>
       )}
@@ -639,7 +774,7 @@ export function Game() {
             <HeartsRow hearts={hud.hearts} />
           </div>
           <p className="mt-5 text-center text-xl leading-tight text-muted-foreground">
-            Next night: {nextNight}s (+{NIGHT_GROWTH_SECONDS}s) with more mobs.
+            Mobs defeated: {hud.kills}. Next night: {nextNight}s with more, faster mobs{hud.level === 1 ? " and zombies" : hud.level === 2 ? " and spiders" : ""}.
           </p>
           <button autoFocus onClick={nextLevel} className="pixel-button mt-6 w-full px-6 py-4 text-sm uppercase">
             Next level
@@ -672,6 +807,31 @@ function Overlay({ children }: { children: React.ReactNode }) {
   );
 }
 
+function explode(w: World, x: number, y: number) {
+  burst(w, x, y, FX.boom, 46, 380);
+  w.flashes.push({ x, y, life: 0.45, max: 0.45 });
+  w.shake = 14;
+}
+
+function swingSword(w: World) {
+  if (w.swingCooldown > 0) return;
+  w.swing = SWORD_SWING_SECONDS;
+  w.swingCooldown = SWORD_COOLDOWN;
+}
+
+/** Drop a block right where Steve is standing. */
+function placeBlock(w: World, kind: BlockKind) {
+  if (w.inventory[kind] <= 0) {
+    w.floaters.push({ x: w.steve.x - 10, y: w.steve.y - 8, text: `no ${kind}`, life: 0.8, color: "#ff9a8a" });
+    return;
+  }
+  const s = w.steve;
+  const x = Math.round(s.x + s.w / 2 - BLOCK_SIZE / 2), y = Math.round(s.y + s.h - BLOCK_SIZE);
+  if (w.blocks.some((b) => Math.abs(b.x - x) < BLOCK_SIZE * 0.6 && Math.abs(b.y - y) < BLOCK_SIZE * 0.6)) return;
+  w.inventory[kind] -= 1;
+  w.blocks.push({ x, y, w: BLOCK_SIZE, h: BLOCK_SIZE, kind, hp: BLOCK_DURABILITY[kind] });
+}
+
 function burst(w: World, x: number, y: number, colors: string[], n: number, speed: number) {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -701,13 +861,53 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
     ctx.restore();
   }
 
+  for (const r of w.resources) {
+    ctx.save();
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2 + Math.sin(t * 3 + r.x) * 3);
+    ctx.rotate(Math.sin(t * 1.5 + r.y) * 0.25);
+    ctx.drawImage(sp[r.kind], -r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.restore();
+  }
+
+  for (const b of w.blocks) {
+    ctx.drawImage(sp[b.kind], b.x, b.y, b.w, b.h);
+    const max = BLOCK_DURABILITY[b.kind];
+    if (b.hp < max) {
+      ctx.strokeStyle = "rgba(20,20,20,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(b.x + 8, b.y + 6); ctx.lineTo(b.x + 20, b.y + 22); ctx.lineTo(b.x + 14, b.y + 34);
+      if (b.hp < max - 1) { ctx.moveTo(b.x + 34, b.y + 8); ctx.lineTo(b.x + 22, b.y + 20); }
+      ctx.stroke();
+    }
+    for (let i = 0; i < b.hp; i++) { ctx.fillStyle = "#ffe066"; ctx.fillRect(b.x + 4 + i * 8, b.y - 8, 6, 4); }
+  }
+
+  for (const a of w.arrows) {
+    const ang = Math.atan2(a.vy, a.vx);
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(ang);
+    ctx.fillStyle = "#6e4c22"; ctx.fillRect(-14, -1, 20, 3);
+    ctx.fillStyle = "#d8d8d8"; ctx.fillRect(6, -3, 5, 7);
+    ctx.fillStyle = "#f0f0f0"; ctx.fillRect(-16, -3, 4, 7);
+    ctx.restore();
+  }
+
   for (const e of w.enemies) {
-    const bob = Math.sin(t * 3 + e.bob) * 4;
+    const bob = e.kind === "spider" ? 0 : Math.sin(t * 3 + e.bob) * 4;
     shadow(e.x + e.w / 2, e.y + e.h + 6, e.w);
     ctx.save();
     ctx.translate(e.x + e.w / 2, e.y + bob);
     if (e.vx < 0) ctx.scale(-1, 1);
-    ctx.drawImage(e.kind === "skeleton" ? sp.skeleton : sp.creeper, -e.w / 2, 0, e.w, e.h);
+    if (e.fuse > 0) {
+      const swell = 1 + (e.fuse / CREEPER_FUSE_SECONDS) * 0.25;
+      ctx.translate(0, e.h / 2); ctx.scale(swell, swell); ctx.translate(0, -e.h / 2);
+    }
+    ctx.drawImage(sp[e.kind], -e.w / 2, 0, e.w, e.h);
+    if (e.fuse > 0 && Math.floor(e.fuse * 10) % 2 === 0) {
+      ctx.globalAlpha = 0.7; ctx.fillStyle = "#ffffff"; ctx.fillRect(-e.w / 2, 0, e.w, e.h); ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 
@@ -720,7 +920,24 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
       ctx.translate(s.x + s.w / 2, s.y + Math.abs(Math.sin(s.walk)) * -3);
       ctx.scale(s.facing, 1);
       ctx.drawImage(sp.steve, -s.w / 2, 0, s.w, s.h);
+      if (w.phase === "night" || w.swing > 0) {
+        const k = w.swing > 0 ? 1 - w.swing / SWORD_SWING_SECONDS : 0;
+        ctx.save();
+        ctx.translate(s.w / 2 - 4, s.h * 0.55);
+        ctx.rotate(-1.2 + k * 2.4);
+        ctx.drawImage(sp.sword, 0, -32, 32, 32);
+        ctx.restore();
+      }
       ctx.restore();
+      if (w.swing > 0) {
+        const k = w.swing / SWORD_SWING_SECONDS;
+        ctx.strokeStyle = `rgba(255,255,255,${k * 0.8})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
+        if (s.facing > 0) ctx.arc(cx, cy, 58, -1.1, 1.1); else ctx.arc(cx, cy, 58, Math.PI - 1.1, Math.PI + 1.1);
+        ctx.stroke();
+      }
     }
   }
 

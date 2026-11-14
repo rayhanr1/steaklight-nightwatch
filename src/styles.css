@@ -49,6 +49,9 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-block-wood: #b8894c;
+  --color-block-stone: #8d8d8d;
+  --color-block-iron: #d8d8d8;
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);

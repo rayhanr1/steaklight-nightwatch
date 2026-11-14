@@ -95,6 +95,23 @@ function render(map: string[], pal: Palette, scale: number, flip = false) {
   return c;
 }
 
+const ZOMBIE = [
+  "GGGGGGGG","GDGGGGDG","GGGGGGGG","GKKGGKKG","GGGDDGGG","GGDDDDGG","GGGGGGGG","GGGGGGGG",
+  "TTTTTTTT","TTTTTTTT","GGTTTTGG","GGTTTTGG","..LLLL..","..LLLL..","..LLLL..","..LLLL..",
+];
+const ZOMBIE_PAL: Palette = { G: "#5f9a4a", D: "#3f6e30", K: "#111111", T: "#2aa2a8", L: "#3d3a9e" };
+const SPIDER = [
+  "L..........L",".L..BBBB..L.","..LBBBBBBL..","LLBRRBBRRBLL",
+  "..BBBBBBBB..",".LBBBBBBBBL.","L..L....L..L","...L....L...",
+];
+const SPIDER_PAL: Palette = { B: "#3a302a", L: "#22201c", R: "#d21f1f" };
+const BLOCK = (a: string, b: string, c: string) => ({ A: a, B: b, C: c });
+const WOOD = ["AAAAAAAA","BBBCBBBB","AAAAAAAA","CBBBBBCB","AAAAAAAA","BBBBCBBB","AAAAAAAA","BCBBBBBB"];
+const STONE = ["AABAACAA","ABAAAAAB","AAACAAAA","BAAAABAA","AAAAAAAC","ACABAAAA","AAAAAABA","BAAACAAA"];
+const IRON = ["CCCCCCCC","CAABAAAC","CABAAABC","CAAAAAAC","CAAAABAC","CBAAAAAC","CAAABAAC","CCCCCCCC"];
+const SWORD = ["......WW",".....WGW","....WGW.","...WGW..","B.WGW...",".BBW....",".HB.....","H.B....."];
+const SWORD_PAL: Palette = { W: "#eef2f4", G: "#b8c4ca", B: "#5a3a1e", H: "#3b2716" };
+
 export type SpriteSet = ReturnType<typeof buildSprites>;
 
 export function buildSprites() {
@@ -103,6 +120,12 @@ export function buildSprites() {
     skeleton: render(SKELETON, SKELETON_PAL, 4),
     creeper: render(CREEPER, CREEPER_PAL, 4),
     steak: render(STEAK, STEAK_PAL, 4),
+    zombie: render(ZOMBIE, ZOMBIE_PAL, 4),
+    spider: render(SPIDER, SPIDER_PAL, 4),
+    wood: render(WOOD, BLOCK("#b8894c", "#9a6f38", "#6e4c22"), 5),
+    stone: render(STONE, BLOCK("#8d8d8d", "#6f6f6f", "#4f4f4f"), 5),
+    iron: render(IRON, BLOCK("#d8d8d8", "#bcbcbc", "#8a8a8a"), 5),
+    sword: render(SWORD, SWORD_PAL, 4),
   };
 }
 
@@ -111,4 +134,6 @@ export const SPRITE_SIZE = {
   skeleton: { w: 32, h: 64 },
   creeper: { w: 32, h: 64 },
   steak: { w: 32, h: 32 },
+  zombie: { w: 32, h: 64 },
+  spider: { w: 48, h: 32 },
 };

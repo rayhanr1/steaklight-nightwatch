@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   applyContact,
+  BLOCK_DURABILITY,
+  hitBlock,
+  mobKindsForLevel,
+  resourceKindsForLevel,
+  swordHits,
   DEFAULT_SETTINGS,
   levelConfig,
   stepMover,
@@ -10,9 +15,9 @@ import {
 const W = 800, H = 600;
 
 describe("game rules", () => {
-  it("defaults to a 5 second day and a 60 second night", () => {
+  it("defaults to a 5 second day and a 20 second night", () => {
     expect(DEFAULT_SETTINGS.dayDuration).toBe(5);
-    expect(DEFAULT_SETTINGS.nightDuration).toBe(60);
+    expect(DEFAULT_SETTINGS.nightDuration).toBe(20);
   });
 
   it("each level makes the day one second longer", () => {
@@ -37,11 +42,40 @@ describe("game rules", () => {
     expect(applyContact(0.5, "creeper")).toBe(0);
   });
 
-  it("each level makes the night longer", () => {
-    const l1 = levelConfig(1, DEFAULT_SETTINGS);
-    const l2 = levelConfig(2, DEFAULT_SETTINGS);
-    expect(l1.nightDuration).toBe(60);
-    expect(l2.nightDuration).toBeGreaterThan(l1.nightDuration);
+  it("night length stays fixed across levels", () => {
+    expect(levelConfig(1, DEFAULT_SETTINGS).nightDuration).toBe(20);
+    expect(levelConfig(6, DEFAULT_SETTINGS).nightDuration).toBe(20);
+  });
+
+  it("wood breaks in 1 hit, stone in 2, iron in 3", () => {
+    expect(BLOCK_DURABILITY).toEqual({ wood: 1, stone: 2, iron: 3 });
+    expect(hitBlock(BLOCK_DURABILITY.wood)).toBe(0);
+    expect(hitBlock(hitBlock(BLOCK_DURABILITY.stone))).toBe(0);
+    expect(hitBlock(hitBlock(BLOCK_DURABILITY.iron))).toBe(1);
+  });
+
+  it("unlocks stone on level 2 and iron on level 3", () => {
+    expect(resourceKindsForLevel(1)).toEqual(["wood"]);
+    expect(resourceKindsForLevel(2)).toEqual(["wood", "stone"]);
+    expect(resourceKindsForLevel(3)).toEqual(["wood", "stone", "iron"]);
+  });
+
+  it("zombies join on level 2 and spiders on level 3", () => {
+    expect(mobKindsForLevel(1)).not.toContain("zombie");
+    expect(mobKindsForLevel(2)).toContain("zombie");
+    expect(mobKindsForLevel(2)).not.toContain("spider");
+    expect(mobKindsForLevel(3)).toContain("spider");
+  });
+
+  it("the sword only hits mobs in front of Steve", () => {
+    const steve = { x: 100, y: 100, w: 32, h: 64 };
+    const right = { x: 150, y: 100, w: 32, h: 64 };
+    expect(swordHits(steve, 1, right)).toBe(true);
+    expect(swordHits(steve, -1, right)).toBe(false);
+  });
+
+  it("an arrow takes half a heart", () => {
+    expect(applyContact(3, "arrow")).toBe(2.5);
   });
 
   it("each level spawns enemies more often", () => {
