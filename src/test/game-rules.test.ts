@@ -127,10 +127,14 @@ describe("high score", () => {
 
 import { RESOURCE_MAX_ON_SCREEN, STEAK_MAX_ON_SCREEN, TNT_FUSE_SECONDS, steakConfig } from "@/game/rules";
 describe("steak supply", () => {
-  it("provides more steaks in early days and at level 10", () => {
-    expect(steakConfig(1)).toEqual({ maxOnScreen: 8, spawnMin: 0.7, spawnMax: 1.4 });
-    expect(steakConfig(5).maxOnScreen).toBe(11);
-    expect(steakConfig(10)).toEqual({ maxOnScreen: 26, spawnMin: 0.25, spawnMax: 0.45 });
+  it("reduces steak counts and slows spawning while preserving level growth", () => {
+    expect(steakConfig(1)).toEqual({ maxOnScreen: 6, spawnMin: 0.9, spawnMax: 1.8 });
+    expect(steakConfig(5).maxOnScreen).toBe(8);
+    expect(steakConfig(10).maxOnScreen).toBe(18);
+    expect(steakConfig(10).spawnMin).toBeCloseTo(0.9 * 0.85 ** 6);
+    expect(steakConfig(10).spawnMax).toBeCloseTo(1.8 * 0.85 ** 6);
+    expect(steakConfig(50).spawnMin).toBe(0.3);
+    expect(steakConfig(50).spawnMax).toBe(0.6);
   });
   it("stays at the base rate through level 4", () => {
     for (const level of [1, 2, 3, 4]) {
@@ -145,9 +149,9 @@ describe("steak supply", () => {
     expect(steakConfig(5).spawnMax).toBeLessThan(steakConfig(4).spawnMax);
   });
   it("steak supply keeps growing beyond level 10 without a level cap", () => {
-    expect(steakConfig(11).maxOnScreen).toBe(29);
-    expect(steakConfig(12).maxOnScreen).toBe(32);
-    expect(steakConfig(50).maxOnScreen).toBe(146);
+    expect(steakConfig(11).maxOnScreen).toBe(20);
+    expect(steakConfig(12).maxOnScreen).toBe(22);
+    expect(steakConfig(50).maxOnScreen).toBe(98);
   });
 });
 

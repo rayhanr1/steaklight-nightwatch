@@ -24,14 +24,14 @@ export const NIGHT_MAX = 30;
 /** Extra day seconds added per level. */
 export const DAY_GROWTH_SECONDS = 1;
 /** Max steaks on screen at once. */
-export const STEAK_MAX_ON_SCREEN = 8;
+export const STEAK_MAX_ON_SCREEN = 6;
 /** Seconds between steak spawns (random between min and max). */
-export const STEAK_SPAWN_MIN = 0.7;
-export const STEAK_SPAWN_MAX = 1.4;
+export const STEAK_SPAWN_MIN = 0.9;
+export const STEAK_SPAWN_MAX = 1.8;
 /** From this level on, more steaks float by and they spawn faster. */
 export const STEAK_RAMP_FROM_LEVEL = 5;
 /** Extra steaks allowed on screen per level past the ramp start. */
-export const STEAK_MAX_GROWTH_PER_LEVEL = 3;
+export const STEAK_MAX_GROWTH_PER_LEVEL = 2;
 
 export type SteakConfig = {
   maxOnScreen: number;
@@ -42,11 +42,11 @@ export type SteakConfig = {
 /** Steaks stay at the base rate through level 4, then keep growing each level without a level cap. */
 export function steakConfig(level: number): SteakConfig {
   const n = Math.max(0, Math.floor(level) - (STEAK_RAMP_FROM_LEVEL - 1));
-  const scale = Math.pow(0.82, n);
+  const scale = Math.pow(0.85, n);
   return {
     maxOnScreen: STEAK_MAX_ON_SCREEN + n * STEAK_MAX_GROWTH_PER_LEVEL,
-    spawnMin: Math.max(0.25, STEAK_SPAWN_MIN * scale),
-    spawnMax: Math.max(0.45, STEAK_SPAWN_MAX * scale),
+    spawnMin: Math.max(0.3, STEAK_SPAWN_MIN * scale),
+    spawnMax: Math.max(0.6, STEAK_SPAWN_MAX * scale),
   };
 }
 
