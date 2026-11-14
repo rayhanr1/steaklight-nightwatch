@@ -24,16 +24,16 @@ export const NIGHT_MAX = 30;
 /** Extra day seconds added per level. */
 export const DAY_GROWTH_SECONDS = 1;
 /** Max steaks on screen at once. */
-export const STEAK_MAX_ON_SCREEN = 6;
+export const STEAK_MAX_ON_SCREEN = 8;
 /** Seconds between steak spawns (random between min and max). */
-export const STEAK_SPAWN_MIN = 0.9;
-export const STEAK_SPAWN_MAX = 1.8;
+export const STEAK_SPAWN_MIN = 0.7;
+export const STEAK_SPAWN_MAX = 1.4;
 /** From this level on, more steaks float by and they spawn faster. */
 export const STEAK_RAMP_FROM_LEVEL = 5;
 /** Steak growth stops here; longer days even it out from this level on. */
 export const STEAK_RAMP_UNTIL_LEVEL = 10;
 /** Extra steaks allowed on screen per level past the ramp start. */
-export const STEAK_MAX_GROWTH_PER_LEVEL = 2;
+export const STEAK_MAX_GROWTH_PER_LEVEL = 3;
 
 export type SteakConfig = {
   maxOnScreen: number;
@@ -47,11 +47,11 @@ export function steakConfig(level: number): SteakConfig {
     0,
     Math.min(Math.floor(level), STEAK_RAMP_UNTIL_LEVEL) - (STEAK_RAMP_FROM_LEVEL - 1),
   );
-  const scale = Math.pow(0.85, n);
+  const scale = Math.pow(0.82, n);
   return {
     maxOnScreen: STEAK_MAX_ON_SCREEN + n * STEAK_MAX_GROWTH_PER_LEVEL,
-    spawnMin: Math.max(0.3, STEAK_SPAWN_MIN * scale),
-    spawnMax: Math.max(0.6, STEAK_SPAWN_MAX * scale),
+    spawnMin: Math.max(0.25, STEAK_SPAWN_MIN * scale),
+    spawnMax: Math.max(0.45, STEAK_SPAWN_MAX * scale),
   };
 }
 
@@ -88,8 +88,8 @@ export function levelConfig(level: number, settings: Settings): LevelConfig {
   return {
     dayDuration: settings.dayDuration + n * DAY_GROWTH_SECONDS,
     nightDuration: Math.min(NIGHT_MAX, Math.max(NIGHT_MIN, settings.nightDuration)),
-    enemySpawnInterval: Math.max(0.5, 2.2 * Math.pow(0.86, n)),
-    enemiesPerWave: 1 + Math.floor(n / 2),
+    enemySpawnInterval: Math.max(1, 2.2 * Math.pow(0.93, n)),
+    enemiesPerWave: Math.min(4, 1 + Math.floor(n / 3)),
     enemySpeed: enemySpeedPx(settings.enemySpeed) * (1 + Math.min(n, 10) * 0.06),
   };
 }

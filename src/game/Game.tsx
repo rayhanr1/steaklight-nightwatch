@@ -284,7 +284,7 @@ export function Game() {
     w.steve.y = w.H / 2 - w.steve.h / 2;
     w.steve.hurt = 0;
     setNight(false);
-    showBanner(`Level ${w.level} · Day`, "Grab the steaks!");
+    showBanner(`Level ${w.level} · Day`, "Prepare for the night!");
     (document.activeElement as HTMLElement | null)?.blur?.();
     go("day");
   }, [go, changePause]);

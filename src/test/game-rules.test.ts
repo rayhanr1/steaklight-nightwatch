@@ -85,6 +85,14 @@ describe("game rules", () => {
     expect(l2.enemySpawnInterval).toBeLessThan(l1.enemySpawnInterval);
   });
 
+  it("eases wave frequency at level 10 and limits later wave growth", () => {
+    const level10 = levelConfig(10, DEFAULT_SETTINGS);
+    expect(level10.enemySpawnInterval).toBeCloseTo(2.2 * 0.93 ** 9);
+    expect(level10.enemiesPerWave).toBe(4);
+    expect(levelConfig(30, DEFAULT_SETTINGS).enemySpawnInterval).toBe(1);
+    expect(levelConfig(30, DEFAULT_SETTINGS).enemiesPerWave).toBe(4);
+  });
+
   it("a faster enemy speed setting moves enemies faster", () => {
     expect(levelConfig(1, { ...DEFAULT_SETTINGS, enemySpeed: 8 }).enemySpeed).toBeGreaterThan(
       levelConfig(1, { ...DEFAULT_SETTINGS, enemySpeed: 2 }).enemySpeed,
@@ -119,6 +127,11 @@ describe("high score", () => {
 
 import { RESOURCE_MAX_ON_SCREEN, STEAK_MAX_ON_SCREEN, TNT_FUSE_SECONDS, steakConfig } from "@/game/rules";
 describe("steak supply", () => {
+  it("provides more steaks in early days and at level 10", () => {
+    expect(steakConfig(1)).toEqual({ maxOnScreen: 8, spawnMin: 0.7, spawnMax: 1.4 });
+    expect(steakConfig(5).maxOnScreen).toBe(11);
+    expect(steakConfig(10)).toEqual({ maxOnScreen: 26, spawnMin: 0.25, spawnMax: 0.45 });
+  });
   it("stays at the base rate through level 4", () => {
     for (const level of [1, 2, 3, 4]) {
       expect(steakConfig(level).maxOnScreen).toBe(STEAK_MAX_ON_SCREEN);

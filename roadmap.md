@@ -4,3 +4,4 @@
 - [x] Add quit and saved-progress controls, and verify the complete flow.
 - [x] Cap steak growth at level 10; speed Steve up from level 10.
 - [x] Show block-placement hints as Z/X/C/V instead of 1/2/3/4.
+- [x] Increase steak supply, ease enemy wave growth, and update the daytime message; verify the changes.
