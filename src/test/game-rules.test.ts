@@ -16,6 +16,7 @@ const W = 800, H = 600;
 
 describe("game rules", () => {
   it("defaults to a 5 second day and a 20 second night", () => {
+    expect(DEFAULT_SETTINGS.enemySpeed).toBe(6);
     expect(DEFAULT_SETTINGS.dayDuration).toBe(5);
     expect(DEFAULT_SETTINGS.nightDuration).toBe(20);
   });
