@@ -585,6 +585,11 @@ export function Game() {
             Eat steaks by day. Dodge skeletons and creepers by night.
           </p>
           {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full rounded-none py-3"><Play /> Continue saved game · Level {saved.world.level}</Button>}
+          {!userId && <Button variant="ghost" onClick={async () => {
+            const result = await lovable.auth.signInWithOAuth("lovable", { redirect_uri: window.location.origin });
+            if (result.error) setSaveMessage("Sign-in didn't finish. Please try again.");
+          }} className="mt-3 h-auto w-full whitespace-normal">Sign in to load saved game</Button>}
+          {saveMessage && <p role="status" className="mt-2 text-center text-xl text-accent">{saveMessage}</p>}
           <div className="mt-6 space-y-5">
             <PixelSlider
               label="Enemy speed"
