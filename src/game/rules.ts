@@ -9,7 +9,7 @@ export type Settings = {
   nightDuration: number;
 };
 
-export const DEFAULT_SETTINGS: Settings = { enemySpeed: 6, dayDuration: 5, nightDuration: 20 };
+export const DEFAULT_SETTINGS: Settings = { enemySpeed: 5, dayDuration: 5, nightDuration: 20 };
 
 export const STARTING_HEARTS = 3;
 export const STEAK_HEAL = 0.5;
