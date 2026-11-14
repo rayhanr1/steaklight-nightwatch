@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Game rules (hearts, durations, bounce counts, level scaling) live as pure functions in `src/game/rules.ts` and are tested in `src/test/game-rules.test.ts`; keep the canvas loop in `src/game/Game.tsx` free of rule constants so rules stay testable.
+- Characters and steaks are pixel maps drawn to canvas in `src/game/sprites.ts`, not image files, so they stay crisp at any scale.
