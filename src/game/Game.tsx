@@ -37,9 +37,7 @@ import {
   overlaps,
   spawnMover,
   STARTING_HEARTS,
-  STEAK_MAX_ON_SCREEN,
-  STEAK_SPAWN_MAX,
-  STEAK_SPAWN_MIN,
+  steakConfig,
   stepMover,
   type LevelConfig,
   type Mover,
@@ -494,8 +492,9 @@ export function Game() {
 
       if (w.phase === "day") {
         w.steakTimer -= dt;
-        if (w.steakTimer <= 0 && w.steaks.length < STEAK_MAX_ON_SCREEN) {
-          w.steakTimer = rnd(STEAK_SPAWN_MIN, STEAK_SPAWN_MAX);
+        const steaks = steakConfig(w.level);
+        if (w.steakTimer <= 0 && w.steaks.length < steaks.maxOnScreen) {
+          w.steakTimer = rnd(steaks.spawnMin, steaks.spawnMax);
           const m = spawnMover(w.W, w.H, SPRITE_SIZE.steak.w, SPRITE_SIZE.steak.h, rnd(130, 220), Math.floor(rnd(0, 4)));
           w.steaks.push({ ...m, spin: rnd(-2, 2) });
         }

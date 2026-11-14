@@ -117,7 +117,21 @@ describe("high score", () => {
   });
 });
 
-import { RESOURCE_MAX_ON_SCREEN, TNT_FUSE_SECONDS } from "@/game/rules";
+import { RESOURCE_MAX_ON_SCREEN, STEAK_MAX_ON_SCREEN, TNT_FUSE_SECONDS, steakConfig } from "@/game/rules";
+describe("steak supply", () => {
+  it("stays at the base rate through level 4", () => {
+    for (const level of [1, 2, 3, 4]) {
+      expect(steakConfig(level).maxOnScreen).toBe(STEAK_MAX_ON_SCREEN);
+    }
+  });
+  it("more steaks float by from level 5, and more each level after", () => {
+    expect(steakConfig(5).maxOnScreen).toBeGreaterThan(STEAK_MAX_ON_SCREEN);
+    expect(steakConfig(6).maxOnScreen).toBeGreaterThan(steakConfig(5).maxOnScreen);
+  });
+  it("steaks spawn faster from level 5", () => {
+    expect(steakConfig(5).spawnMax).toBeLessThan(steakConfig(4).spawnMax);
+  });
+});
 describe("tnt and block supply", () => {
   it("tnt only appears from level 5", () => {
     expect(resourceKindsForLevel(4)).not.toContain("tnt");
