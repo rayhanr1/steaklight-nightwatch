@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { clampHearts, HEARTS_PER_ROW } from "./rules";
 
 // 7x6 pixel heart. O = outline, R = red, W = shine.
 const MAP = [".OO.OO.", "OWRORRO", "ORRRRRO", ".ORRRO.", "..ORO..", "...O..."];
@@ -26,12 +27,17 @@ export function PixelHeart({ fill, className }: { fill: "full" | "half" | "empty
 }
 
 export function HeartsRow({ hearts }: { hearts: number }) {
-  const full = Math.floor(hearts);
-  const half = hearts - full >= 0.5;
+  const life = clampHearts(hearts);
+  const full = Math.floor(life);
+  const half = life - full >= 0.5;
   const items: ("full" | "half")[] = [...Array(full).fill("full"), ...(half ? ["half" as const] : [])];
   return (
-    <div className="flex max-w-[18rem] flex-wrap gap-1">
-      {items.length === 0 ? <PixelHeart fill="empty" /> : items.map((f, i) => <PixelHeart key={i} fill={f} />)}
+    <div className="flex flex-col gap-1" aria-label={`${life} hearts`}>
+      {items.length === 0 ? <PixelHeart fill="empty" /> : Array.from({ length: Math.ceil(items.length / HEARTS_PER_ROW) }, (_, row) => (
+        <div key={row} className="flex gap-1">
+          {items.slice(row * HEARTS_PER_ROW, (row + 1) * HEARTS_PER_ROW).map((f, i) => <PixelHeart key={i} fill={f} />)}
+        </div>
+      ))}
     </div>
   );
 }

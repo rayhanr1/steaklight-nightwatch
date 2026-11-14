@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { World } from "./Game";
-import type { Settings } from "./rules";
+import { clampHearts, type Settings } from "./rules";
 
 const number = z.number().finite();
 const mover = z.object({ x: number, y: number, w: number.positive(), h: number.positive(), vx: number, vy: number, bounces: number, maxBounces: number, entered: z.boolean() });
@@ -9,7 +9,7 @@ const settingsSchema = z.object({ enemySpeed: number.min(1).max(10), dayDuration
 export const progressSchema = z.object({
   version: z.literal(2), settings: settingsSchema, animationTime: number.nonnegative(), videoTime: number.nonnegative(),
   world: z.object({
-    W: number.positive(), H: number.positive(), phase: z.enum(["day", "night", "levelComplete"]), level: number.int().positive(), hearts: number.positive(), timeLeft: number,
+    W: number.positive(), H: number.positive(), phase: z.enum(["day", "night", "levelComplete"]), level: number.int().positive(), hearts: number.positive().transform(clampHearts), timeLeft: number,
     cfg: z.object({ dayDuration: number, nightDuration: number, enemySpawnInterval: number, enemiesPerWave: number, enemySpeed: number }),
     steve: z.object({ x: number, y: number, w: number, h: number, facing: z.union([z.literal(1), z.literal(-1)]), hurt: number, walk: number }),
     steaks: z.array(mover.extend({ spin: number })), enemies: z.array(mover.extend({ kind: z.enum(["skeleton", "creeper", "zombie", "spider"]), bob: number, timer: number, fuse: number })),

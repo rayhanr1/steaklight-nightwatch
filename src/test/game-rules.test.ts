@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   applyContact,
+  clampHearts,
+  MAX_HEARTS,
+  HEARTS_PER_ROW,
   BLOCK_DURABILITY,
   hitBlock,
   mobKindsForLevel,
@@ -29,6 +32,19 @@ describe("game rules", () => {
 
   it("a steak adds half a heart", () => {
     expect(applyContact(3, "steak")).toBe(3.5);
+  });
+
+  it("caps life at 18 hearts including healing at the limit", () => {
+    expect(MAX_HEARTS).toBe(18);
+    expect(clampHearts(30)).toBe(18);
+    expect(applyContact(17.5, "steak")).toBe(18);
+    expect(applyContact(18, "steak")).toBe(18);
+    expect(applyContact(18, "skeleton")).toBe(17.5);
+  });
+
+  it("allocates nine hearts per row for two rows at maximum life", () => {
+    expect(HEARTS_PER_ROW).toBe(9);
+    expect(MAX_HEARTS / HEARTS_PER_ROW).toBe(2);
   });
 
   it("a skeleton takes half a heart", () => {

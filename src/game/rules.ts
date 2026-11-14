@@ -12,6 +12,11 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = { enemySpeed: 5, dayDuration: 5, nightDuration: 20 };
 
 export const STARTING_HEARTS = 3;
+export const MAX_HEARTS = 18;
+export const HEARTS_PER_ROW = 9;
+export function clampHearts(hearts: number) {
+  return Math.min(MAX_HEARTS, Math.max(0, hearts));
+}
 export const STEAK_HEAL = 0.5;
 export const SKELETON_DAMAGE = 0.5;
 export const CREEPER_DAMAGE = 1;
@@ -98,7 +103,7 @@ export const HIT_DELTA: Record<HitKind, number> = {
 
 export function applyContact(hearts: number, kind: HitKind) {
   const delta = HIT_DELTA[kind];
-  return Math.max(0, Math.round((hearts + delta) * 2) / 2);
+  return clampHearts(Math.round((hearts + delta) * 2) / 2);
 }
 
 export type Mover = {
