@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import dayVideo from "@/assets/forest-day-stable.mp4.asset.json";
 import dayImg from "@/assets/forest-day.jpg";
 import nightImg from "@/assets/forest-night.jpg";
 import { cn } from "@/lib/utils";
@@ -604,14 +603,11 @@ export function Game() {
   return (
     <div className={cn("relative h-dvh w-full select-none overflow-hidden bg-night", paused && "game-paused")}>
       {/* Background: day video crossfades to the night scene */}
-      <video
-        ref={videoRef}
-        src={dayVideo.url}
-        poster={dayImg}
-        autoPlay
-        muted
-        loop
-        playsInline
+      <img
+        src={dayImg}
+        alt=""
+        width={1920}
+        height={1088}
         className={cn(
           "absolute inset-0 h-full w-full object-cover transition-opacity duration-[2500ms]",
           night ? "opacity-0" : "opacity-100",
@@ -855,16 +851,14 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
 
   for (const s of w.steaks) {
     ctx.save();
-    ctx.translate(s.x + s.w / 2, s.y + s.h / 2 + Math.sin(t * 4 + s.spin) * 3);
-    ctx.rotate(Math.sin(t * 2 + s.spin) * 0.35);
+    ctx.translate(Math.round(s.x + s.w / 2), Math.round(s.y + s.h / 2 + Math.sin(t * 2 + s.spin) * 2));
     ctx.drawImage(sp.steak, -s.w / 2, -s.h / 2, s.w, s.h);
     ctx.restore();
   }
 
   for (const r of w.resources) {
     ctx.save();
-    ctx.translate(r.x + r.w / 2, r.y + r.h / 2 + Math.sin(t * 3 + r.x) * 3);
-    ctx.rotate(Math.sin(t * 1.5 + r.y) * 0.25);
+    ctx.translate(Math.round(r.x + r.w / 2), Math.round(r.y + r.h / 2));
     ctx.drawImage(sp[r.kind], -r.w / 2, -r.h / 2, r.w, r.h);
     ctx.restore();
   }
@@ -895,10 +889,10 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
   }
 
   for (const e of w.enemies) {
-    const bob = e.kind === "spider" ? 0 : Math.sin(t * 3 + e.bob) * 4;
+    const bob = e.kind === "spider" ? 0 : Math.sin(t * 2 + e.bob) * 2;
     shadow(e.x + e.w / 2, e.y + e.h + 6, e.w);
     ctx.save();
-    ctx.translate(e.x + e.w / 2, e.y + bob);
+    ctx.translate(Math.round(e.x + e.w / 2), Math.round(e.y + bob));
     if (e.vx < 0) ctx.scale(-1, 1);
     if (e.fuse > 0) {
       const swell = 1 + (e.fuse / CREEPER_FUSE_SECONDS) * 0.25;
@@ -917,7 +911,7 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
     shadow(s.x + s.w / 2, s.y + s.h + 4, s.w);
     if (!blink) {
       ctx.save();
-      ctx.translate(s.x + s.w / 2, s.y + Math.abs(Math.sin(s.walk)) * -3);
+      ctx.translate(Math.round(s.x + s.w / 2), Math.round(s.y + Math.abs(Math.sin(s.walk)) * -2));
       ctx.scale(s.facing, 1);
       ctx.drawImage(sp.steve, -s.w / 2, 0, s.w, s.h);
       if (w.phase === "night" || w.swing > 0) {
