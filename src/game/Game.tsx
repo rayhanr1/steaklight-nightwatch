@@ -539,6 +539,7 @@ export function Game() {
           s.hurt = 0.6;
           w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
         };
+        const blasts: { x: number; y: number; from: Enemy }[] = [];
         w.enemies = w.enemies.filter((e) => {
           const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
           const speed = w.cfg.enemySpeed;
@@ -548,7 +549,7 @@ export function Game() {
               e.fuse += dt;
               e.vx *= 0.9; e.vy *= 0.9;
               if (e.fuse >= CREEPER_FUSE_SECONDS) {
-                explode(w, cx, cy);
+                explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e });
                 if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y);
                 for (const b of w.blocks) if (Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy) < CREEPER_BLAST_RADIUS) b.hp = hitBlock(b.hp);
                 return false;
@@ -578,7 +579,7 @@ export function Game() {
             if (b.hp > 0 && overlaps(e, b, 0.05)) {
               b.hp = hitBlock(b.hp);
               burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 10, 150);
-              if (e.kind === "creeper") { explode(w, cx, cy); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
+              if (e.kind === "creeper") { explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e }); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
               const ox = cx - (b.x + b.w / 2), oy = cy - (b.y + b.h / 2);
               if (Math.abs(ox) / (e.w + b.w) > Math.abs(oy) / (e.h + b.h)) { e.vx = Math.sign(ox || 1) * Math.abs(e.vx || speed); e.x += Math.sign(ox || 1) * 8; }
               else { e.vy = Math.sign(oy || 1) * Math.abs(e.vy || speed); e.y += Math.sign(oy || 1) * 8; }
@@ -600,6 +601,22 @@ export function Game() {
           }
           return true;
         });
+        // Creeper explosions also destroy nearby mobs (and can chain into other creepers).
+        for (let i = 0; i < blasts.length; i++) {
+          const bl = blasts[i]!;
+          w.enemies = w.enemies.filter((o) => {
+            if (o === bl.from) return false;
+            const ox = o.x + o.w / 2, oy = o.y + o.h / 2;
+            if (Math.hypot(ox - bl.x, oy - bl.y) >= CREEPER_BLAST_RADIUS) return true;
+            w.kills += 1;
+            if (o.kind === "creeper") {
+              explode(w, ox, oy);
+              blasts.push({ x: ox, y: oy, from: o });
+              if (Math.hypot(scx - ox, scy - oy) < CREEPER_BLAST_RADIUS) hurt("creeper", ox, o.y);
+            } else burst(w, ox, oy, o.kind === "skeleton" ? FX.bone : FX.mob, 16, 220);
+            return false;
+          });
+        }
         w.arrows = w.arrows.filter((ar) => {
           ar.x += ar.vx * dt; ar.y += ar.vy * dt;
           if (ar.x < -20 || ar.y < -20 || ar.x > w.W + 20 || ar.y > w.H + 20) return false;
