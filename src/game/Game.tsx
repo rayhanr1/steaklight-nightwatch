@@ -731,7 +731,7 @@ export function Game() {
               {(["wood", "stone", "iron"] as const).map((k, i) => (
                 <span key={k} className="flex items-center gap-1" title={`${k} (press ${i + 1})`}>
                   <span className={cn("inline-block h-4 w-4 border-2 border-border", k === "wood" ? "bg-block-wood" : k === "stone" ? "bg-block-stone" : "bg-block-iron")} />
-                  {i + 1}:{hud[k]}
+                  {hud[k]}
                 </span>
               ))}
             </div>
