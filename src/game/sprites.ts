@@ -109,6 +109,7 @@ const BLOCK = (a: string, b: string, c: string) => ({ A: a, B: b, C: c });
 const WOOD = ["AAAAAAAA","BBBCBBBB","AAAAAAAA","CBBBBBCB","AAAAAAAA","BBBBCBBB","AAAAAAAA","BCBBBBBB"];
 const STONE = ["AABAACAA","ABAAAAAB","AAACAAAA","BAAAABAA","AAAAAAAC","ACABAAAA","AAAAAABA","BAAACAAA"];
 const IRON = ["CCCCCCCC","CAABAAAC","CABAAABC","CAAAAAAC","CAAAABAC","CBAAAAAC","CAAABAAC","CCCCCCCC"];
+const TNT = ["AAAAAAAA","ABAABAAB","AAAAAAAA","CCCCCCCC","CDCDDCDC","CCCCCCCC","AAAAAAAA","ABAABAAB"];
 const SWORD = ["......WW",".....WGW","....WGW.","...WGW..","B.WGW...",".BBW....",".HB.....","H.B....."];
 const SWORD_PAL: Palette = { W: "#eef2f4", G: "#b8c4ca", B: "#5a3a1e", H: "#3b2716" };
 
@@ -124,6 +125,7 @@ export function buildSprites() {
     spider: render(SPIDER, SPIDER_PAL, 4),
     wood: render(WOOD, BLOCK("#b8894c", "#9a6f38", "#6e4c22"), 5),
     stone: render(STONE, BLOCK("#8d8d8d", "#6f6f6f", "#4f4f4f"), 5),
+    tnt: render(TNT, { A: "#c8322a", B: "#8e1f1a", C: "#eeeeee", D: "#222222" }, 5),
     iron: render(IRON, BLOCK("#d8d8d8", "#bcbcbc", "#8a8a8a"), 5),
     sword: render(SWORD, SWORD_PAL, 4),
   };

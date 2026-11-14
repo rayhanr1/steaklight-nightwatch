@@ -204,19 +204,30 @@ export function swordHits(steve: Box, facing: 1 | -1, target: Box) {
 }
 
 // ---------- Blocks ----------
-export type BlockKind = "wood" | "stone" | "iron";
+export type BlockKind = "wood" | "stone" | "iron" | "tnt";
 export const BLOCK_SIZE = 40;
+/** Placed TNT is not an obstacle; it explodes this long after being placed. */
+export const TNT_FUSE_SECONDS = 1;
+export const TNT_BLAST_RADIUS = 130;
+export const TNT_FROM_LEVEL = 5;
+/** Large so hits never remove TNT; any hit just shortens its fuse. */
+export const TNT_HP = 99;
 /** Hits a placed block absorbs before breaking. */
-export const BLOCK_DURABILITY: Record<BlockKind, number> = { wood: 1, stone: 2, iron: 3 };
-/** Wood from level 1, stone from level 2, iron from level 3. */
+export const BLOCK_DURABILITY: Record<BlockKind, number> = { wood: 1, stone: 2, iron: 3, tnt: TNT_HP };
+/** Wood from level 1, stone from level 2, iron from level 3, TNT from level 5. */
 export function resourceKindsForLevel(level: number): BlockKind[] {
-  return (["wood", "stone", "iron"] as BlockKind[]).slice(0, Math.min(3, Math.max(1, Math.floor(level))));
+  const kinds = (["wood", "stone", "iron"] as BlockKind[]).slice(0, Math.min(3, Math.max(1, Math.floor(level))));
+  if (level >= TNT_FROM_LEVEL) kinds.push("tnt");
+  return kinds;
 }
 /** Returns the block's remaining hits after taking one; 0 means it breaks. */
 export function hitBlock(hp: number) {
   return Math.max(0, hp - 1);
 }
-export const RESOURCE_MAX_ON_SCREEN = 3;
+export const RESOURCE_MAX_ON_SCREEN = 6;
+/** Seconds between block spawns by day (random between min and max). */
+export const RESOURCE_SPAWN_MIN = 0.45;
+export const RESOURCE_SPAWN_MAX = 0.9;
 
 // ---------- Score ----------
 export const SCORE_PER_LEVEL = 100;

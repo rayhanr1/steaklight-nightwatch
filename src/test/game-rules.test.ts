@@ -49,7 +49,7 @@ describe("game rules", () => {
   });
 
   it("wood breaks in 1 hit, stone in 2, iron in 3", () => {
-    expect(BLOCK_DURABILITY).toEqual({ wood: 1, stone: 2, iron: 3 });
+    expect(BLOCK_DURABILITY).toMatchObject({ wood: 1, stone: 2, iron: 3 });
     expect(hitBlock(BLOCK_DURABILITY.wood)).toBe(0);
     expect(hitBlock(hitBlock(BLOCK_DURABILITY.stone))).toBe(0);
     expect(hitBlock(hitBlock(BLOCK_DURABILITY.iron))).toBe(1);
@@ -114,5 +114,19 @@ describe("high score", () => {
   it("only replaces the high score when beaten", () => {
     expect(mergeHighScore({ score: 300, level: 3 }, { score: 120, level: 2 })).toEqual({ score: 300, level: 3 });
     expect(mergeHighScore({ score: 300, level: 3 }, { score: 450, level: 4 })).toEqual({ score: 450, level: 4 });
+  });
+});
+
+import { RESOURCE_MAX_ON_SCREEN, TNT_FUSE_SECONDS } from "@/game/rules";
+describe("tnt and block supply", () => {
+  it("tnt only appears from level 5", () => {
+    expect(resourceKindsForLevel(4)).not.toContain("tnt");
+    expect(resourceKindsForLevel(5)).toContain("tnt");
+  });
+  it("tnt explodes 1 second after placing", () => {
+    expect(TNT_FUSE_SECONDS).toBe(1);
+  });
+  it("more blocks can float by during the day", () => {
+    expect(RESOURCE_MAX_ON_SCREEN).toBeGreaterThan(3);
   });
 });

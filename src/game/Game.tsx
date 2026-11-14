@@ -18,6 +18,11 @@ import {
   hitBlock,
   mobKindsForLevel,
   RESOURCE_MAX_ON_SCREEN,
+  RESOURCE_SPAWN_MAX,
+  RESOURCE_SPAWN_MIN,
+  TNT_BLAST_RADIUS,
+  TNT_FUSE_SECONDS,
+  TNT_HP,
   resourceKindsForLevel,
   SKELETON_SHOOT_EVERY,
   steerToward,
@@ -50,7 +55,7 @@ import { captureProgress, progressSchema, simulationDelta, type Progress } from 
 type Phase = "menu" | "day" | "night" | "levelComplete" | "gameOver";
 type Enemy = Mover & { kind: MobKind; bob: number; timer: number; fuse: number };
 type Resource = Mover & { kind: BlockKind };
-type Block = { x: number; y: number; w: number; h: number; kind: BlockKind; hp: number };
+type Block = { x: number; y: number; w: number; h: number; kind: BlockKind; hp: number; fuse: number };
 type Arrow = { x: number; y: number; w: number; h: number; vx: number; vy: number };
 type Steak = Mover & { spin: number };
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string };
@@ -86,7 +91,7 @@ export type World = {
   pointer: { x: number; y: number } | null;
 };
 
-type Hud = { hearts: number; level: number; timeLeft: number; total: number; steaks: number; wood: number; stone: number; iron: number; kills: number };
+type Hud = { hearts: number; level: number; timeLeft: number; total: number; steaks: number; wood: number; stone: number; iron: number; tnt: number; kills: number };
 
 const STEVE_SPEED = 330;
 // In-game art colors (canvas), not UI theme colors.
@@ -98,6 +103,7 @@ const FX = {
   wood: ["#b8894c", "#9a6f38", "#6e4c22"],
   stone: ["#8d8d8d", "#6f6f6f", "#4f4f4f"],
   iron: ["#d8d8d8", "#bcbcbc", "#8a8a8a"],
+  tnt: ["#c8322a", "#eeeeee", "#8e1f1a"],
 };
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -123,7 +129,7 @@ export function Game() {
   const [phase, setPhase] = useState<Phase>("menu");
   const [night, setNight] = useState(false);
   const [banner, setBanner] = useState<{ text: string; sub: string; key: number } | null>(null);
-  const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0, wood: 0, stone: 0, iron: 0, kills: 0 });
+  const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0, wood: 0, stone: 0, iron: 0, tnt: 0, kills: 0 });
   const keys = useRef(new Set<string>());
   const [best, setBest] = useState<HighScore>({ score: 0, level: 0 });
   const [lastScore, setLastScore] = useState(0);
@@ -193,7 +199,7 @@ export function Game() {
     resources: [],
     blocks: [],
     arrows: [],
-    inventory: { wood: 0, stone: 0, iron: 0 },
+    inventory: { wood: 0, stone: 0, iron: 0, tnt: 0 },
     swing: 0,
     swingCooldown: 0,
     resourceTimer: 1,
@@ -303,7 +309,7 @@ export function Game() {
     w.hearts = STARTING_HEARTS;
     w.steaksEaten = 0;
     w.kills = 0;
-    w.inventory = { wood: 0, stone: 0, iron: 0 };
+    w.inventory = { wood: 0, stone: 0, iron: 0, tnt: 0 };
     startDay();
   }, [settings, startDay]);
 
@@ -366,7 +372,7 @@ export function Game() {
       if (p === "day" || p === "night") {
         const w = world.current;
         if (e.key === " " && !e.repeat) { e.preventDefault(); swingSword(w); return; }
-        const place: Record<string, BlockKind> = { "1": "wood", z: "wood", "2": "stone", x: "stone", "3": "iron", c: "iron" };
+        const place: Record<string, BlockKind> = { "1": "wood", z: "wood", "2": "stone", x: "stone", "3": "iron", c: "iron", "4": "tnt", v: "tnt" };
         const kind = place[e.key.toLowerCase()];
         if (kind && !e.repeat) { e.preventDefault(); placeBlock(w, kind); return; }
       }
@@ -506,7 +512,7 @@ export function Game() {
         });
         w.resourceTimer -= dt;
         if (w.resourceTimer <= 0 && w.resources.length < RESOURCE_MAX_ON_SCREEN) {
-          w.resourceTimer = rnd(1.2, 2.2);
+          w.resourceTimer = rnd(RESOURCE_SPAWN_MIN, RESOURCE_SPAWN_MAX);
           const m = spawnMover(w.W, w.H, 32, 32, rnd(110, 180), Math.floor(rnd(1, 4)));
           w.resources.push({ ...m, kind: pick(resourceKindsForLevel(w.level)) });
         }
@@ -539,7 +545,20 @@ export function Game() {
           s.hurt = 0.6;
           w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
         };
-        const blasts: { x: number; y: number; from: Enemy }[] = [];
+        const blasts: { x: number; y: number; from: Enemy | null; r: number }[] = [];
+        // TNT: any hit shortens the fuse; on detonation it hurts Steve if close and cracks nearby blocks.
+        for (const b of w.blocks) {
+          if (b.kind !== "tnt" || b.hp <= 0) continue;
+          if (b.hp < TNT_HP) { b.fuse = Math.min(b.fuse, 0.12); b.hp = TNT_HP; }
+          b.fuse -= dt;
+          if (b.fuse > 0) continue;
+          const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+          b.hp = 0;
+          explode(w, bx, by);
+          blasts.push({ x: bx, y: by, from: null, r: TNT_BLAST_RADIUS });
+          if (Math.hypot(scx - bx, scy - by) < TNT_BLAST_RADIUS) hurt("creeper", bx, b.y);
+          for (const o of w.blocks) if (o !== b && o.hp > 0 && Math.hypot(o.x + o.w / 2 - bx, o.y + o.h / 2 - by) < TNT_BLAST_RADIUS) o.hp = hitBlock(o.hp);
+        }
         w.enemies = w.enemies.filter((e) => {
           const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
           const speed = w.cfg.enemySpeed;
@@ -549,7 +568,7 @@ export function Game() {
               e.fuse += dt;
               e.vx *= 0.9; e.vy *= 0.9;
               if (e.fuse >= CREEPER_FUSE_SECONDS) {
-                explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e });
+                explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e, r: CREEPER_BLAST_RADIUS });
                 if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y);
                 for (const b of w.blocks) if (Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy) < CREEPER_BLAST_RADIUS) b.hp = hitBlock(b.hp);
                 return false;
@@ -576,10 +595,10 @@ export function Game() {
           if (!stepMover(e, dt, w.W, w.H)) return false;
           // Placed blocks stop mobs and take a hit.
           for (const b of w.blocks) {
-            if (b.hp > 0 && overlaps(e, b, 0.05)) {
+            if (b.hp > 0 && b.kind !== "tnt" && overlaps(e, b, 0.05)) {
               b.hp = hitBlock(b.hp);
               burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 10, 150);
-              if (e.kind === "creeper") { explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e }); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
+              if (e.kind === "creeper") { explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e, r: CREEPER_BLAST_RADIUS }); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
               const ox = cx - (b.x + b.w / 2), oy = cy - (b.y + b.h / 2);
               if (Math.abs(ox) / (e.w + b.w) > Math.abs(oy) / (e.h + b.h)) { e.vx = Math.sign(ox || 1) * Math.abs(e.vx || speed); e.x += Math.sign(ox || 1) * 8; }
               else { e.vy = Math.sign(oy || 1) * Math.abs(e.vy || speed); e.y += Math.sign(oy || 1) * 8; }
@@ -607,11 +626,11 @@ export function Game() {
           w.enemies = w.enemies.filter((o) => {
             if (o === bl.from) return false;
             const ox = o.x + o.w / 2, oy = o.y + o.h / 2;
-            if (Math.hypot(ox - bl.x, oy - bl.y) >= CREEPER_BLAST_RADIUS) return true;
+            if (Math.hypot(ox - bl.x, oy - bl.y) >= bl.r) return true;
             w.kills += 1;
             if (o.kind === "creeper") {
               explode(w, ox, oy);
-              blasts.push({ x: ox, y: oy, from: o });
+              blasts.push({ x: ox, y: oy, from: o, r: CREEPER_BLAST_RADIUS });
               if (Math.hypot(scx - ox, scy - oy) < CREEPER_BLAST_RADIUS) hurt("creeper", ox, o.y);
             } else burst(w, ox, oy, o.kind === "skeleton" ? FX.bone : FX.mob, 16, 220);
             return false;
@@ -621,13 +640,13 @@ export function Game() {
           ar.x += ar.vx * dt; ar.y += ar.vy * dt;
           if (ar.x < -20 || ar.y < -20 || ar.x > w.W + 20 || ar.y > w.H + 20) return false;
           if (w.swing > 0 && swordHits(s, s.facing, ar)) return false;
-          for (const b of w.blocks) if (b.hp > 0 && overlaps(ar, b, 0)) { b.hp = hitBlock(b.hp); burst(w, ar.x, ar.y, FX[b.kind], 6, 100); return false; }
+          for (const b of w.blocks) if (b.hp > 0 && b.kind !== "tnt" && overlaps(ar, b, 0)) { b.hp = hitBlock(b.hp); burst(w, ar.x, ar.y, FX[b.kind], 6, 100); return false; }
           if (overlaps(s, ar, 0.15)) { hurt("arrow", ar.x, ar.y); w.shake = 4; return false; }
           return true;
         });
         w.blocks = w.blocks.filter((b) => {
           if (b.hp > 0) return true;
-          burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 18, 220);
+          if (b.kind !== "tnt") burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 18, 220);
           return false;
         });
         if (w.hearts <= 0) {
@@ -728,9 +747,9 @@ export function Game() {
             </div>
             <HeartsRow hearts={hud.hearts} />
             <div className="mt-3 flex gap-3 font-display text-[10px] text-foreground">
-              {(["wood", "stone", "iron"] as const).map((k, i) => (
+              {(["wood", "stone", "iron", "tnt"] as const).filter((k) => k !== "tnt" || hud.tnt > 0 || hud.level >= 5).map((k, i) => (
                 <span key={k} className="flex items-center gap-1" title={`${k} (press ${i + 1})`}>
-                  <span className={cn("inline-block h-4 w-4 border-2 border-border", k === "wood" ? "bg-block-wood" : k === "stone" ? "bg-block-stone" : "bg-block-iron")} />
+                  <span className={cn("inline-block h-4 w-4 border-2 border-border", k === "wood" ? "bg-block-wood" : k === "stone" ? "bg-block-stone" : k === "iron" ? "bg-block-iron" : "bg-block-tnt")} />
                   {hud[k]}
                 </span>
               ))}
@@ -811,7 +830,7 @@ export function Game() {
             Start new game
           </button>
           <p className="mt-4 text-center text-xl leading-tight text-muted-foreground">
-            Arrows/WASD move · Space swings sword · 1/2/3 place wood/stone/iron where you stand
+            Arrows/WASD move · Space swings sword · 1/2/3 place wood/stone/iron where you stand · 4 or V drops TNT (level 5+)
           </p>
         </Overlay>
       )}
@@ -888,7 +907,7 @@ function placeBlock(w: World, kind: BlockKind) {
   const x = Math.round(s.x + s.w / 2 - BLOCK_SIZE / 2), y = Math.round(s.y + s.h - BLOCK_SIZE);
   if (w.blocks.some((b) => Math.abs(b.x - x) < BLOCK_SIZE * 0.6 && Math.abs(b.y - y) < BLOCK_SIZE * 0.6)) return;
   w.inventory[kind] -= 1;
-  w.blocks.push({ x, y, w: BLOCK_SIZE, h: BLOCK_SIZE, kind, hp: BLOCK_DURABILITY[kind] });
+  w.blocks.push({ x, y, w: BLOCK_SIZE, h: BLOCK_SIZE, kind, hp: BLOCK_DURABILITY[kind], fuse: kind === "tnt" ? TNT_FUSE_SECONDS : 0 });
 }
 
 function burst(w: World, x: number, y: number, colors: string[], n: number, speed: number) {
@@ -928,6 +947,10 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
 
   for (const b of w.blocks) {
     ctx.drawImage(sp[b.kind], b.x, b.y, b.w, b.h);
+    if (b.kind === "tnt") {
+      if (Math.floor(b.fuse * 12) % 2 === 0) { ctx.globalAlpha = 0.6; ctx.fillStyle = "#ffffff"; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1; }
+      continue;
+    }
     const max = BLOCK_DURABILITY[b.kind];
     if (b.hp < max) {
       ctx.strokeStyle = "rgba(20,20,20,0.85)";

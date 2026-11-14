@@ -52,6 +52,7 @@
   --color-block-wood: #b8894c;
   --color-block-stone: #8d8d8d;
   --color-block-iron: #d8d8d8;
+  --color-block-tnt: #c8322a;
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
