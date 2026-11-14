@@ -10,9 +10,15 @@ import {
 const W = 800, H = 600;
 
 describe("game rules", () => {
-  it("defaults to a 30 second day and a 60 second night", () => {
-    expect(DEFAULT_SETTINGS.dayDuration).toBe(30);
+  it("defaults to a 5 second day and a 60 second night", () => {
+    expect(DEFAULT_SETTINGS.dayDuration).toBe(5);
     expect(DEFAULT_SETTINGS.nightDuration).toBe(60);
+  });
+
+  it("each level makes the day one second longer", () => {
+    expect(levelConfig(1, DEFAULT_SETTINGS).dayDuration).toBe(5);
+    expect(levelConfig(2, DEFAULT_SETTINGS).dayDuration).toBe(6);
+    expect(levelConfig(5, DEFAULT_SETTINGS).dayDuration).toBe(9);
   });
 
   it("a steak adds half a heart", () => {

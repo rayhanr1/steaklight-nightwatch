@@ -14,6 +14,9 @@ import {
   overlaps,
   spawnMover,
   STARTING_HEARTS,
+  STEAK_MAX_ON_SCREEN,
+  STEAK_SPAWN_MAX,
+  STEAK_SPAWN_MIN,
   stepMover,
   type LevelConfig,
   type Mover,
@@ -290,8 +293,8 @@ export function Game() {
 
       if (w.phase === "day") {
         w.steakTimer -= dt;
-        if (w.steakTimer <= 0 && w.steaks.length < 14) {
-          w.steakTimer = rnd(0.45, 0.9);
+        if (w.steakTimer <= 0 && w.steaks.length < STEAK_MAX_ON_SCREEN) {
+          w.steakTimer = rnd(STEAK_SPAWN_MIN, STEAK_SPAWN_MAX);
           const m = spawnMover(w.W, w.H, SPRITE_SIZE.steak.w, SPRITE_SIZE.steak.h, rnd(130, 220), Math.floor(rnd(0, 4)));
           w.steaks.push({ ...m, spin: rnd(-2, 2) });
         }
@@ -462,7 +465,7 @@ export function Game() {
             <PixelSlider
               label="Day length"
               value={settings.dayDuration}
-              min={10}
+              min={5}
               max={120}
               step={5}
               format={(v) => `${v}s`}

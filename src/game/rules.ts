@@ -9,7 +9,7 @@ export type Settings = {
   nightDuration: number;
 };
 
-export const DEFAULT_SETTINGS: Settings = { enemySpeed: 3, dayDuration: 30, nightDuration: 60 };
+export const DEFAULT_SETTINGS: Settings = { enemySpeed: 3, dayDuration: 5, nightDuration: 60 };
 
 export const STARTING_HEARTS = 3;
 export const STEAK_HEAL = 0.5;
@@ -19,6 +19,13 @@ export const CREEPER_DAMAGE = 1;
 export const ENEMY_MAX_BOUNCES = 2;
 /** Extra night seconds added per level. */
 export const NIGHT_GROWTH_SECONDS = 5;
+/** Extra day seconds added per level. */
+export const DAY_GROWTH_SECONDS = 1;
+/** Max steaks on screen at once. */
+export const STEAK_MAX_ON_SCREEN = 6;
+/** Seconds between steak spawns (random between min and max). */
+export const STEAK_SPAWN_MIN = 0.9;
+export const STEAK_SPAWN_MAX = 1.8;
 
 export type LevelConfig = {
   dayDuration: number;
@@ -37,7 +44,7 @@ export function enemySpeedPx(slider: number) {
 export function levelConfig(level: number, settings: Settings): LevelConfig {
   const n = Math.max(1, Math.floor(level)) - 1;
   return {
-    dayDuration: settings.dayDuration,
+    dayDuration: settings.dayDuration + n * DAY_GROWTH_SECONDS,
     nightDuration: settings.nightDuration + n * NIGHT_GROWTH_SECONDS,
     enemySpawnInterval: Math.max(0.6, 2.6 * Math.pow(0.88, n)),
     enemiesPerWave: 1 + Math.floor(n / 3),
