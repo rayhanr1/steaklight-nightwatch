@@ -1,4 +1,5 @@
 # Game updates
+- [x] Shift enemy speed up one step, retain surviving blocks, double durability, strengthen repulsion, and increase daytime block supply; verify.
 - [x] Cap life at 18 hearts, display nine hearts per row, and verify saved life normalization and healing.
 - [x] Stabilize the day forest video and remove night camera drift.
 - [x] Add pause/resume that freezes timers, objects, and animations.

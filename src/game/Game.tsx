@@ -12,6 +12,9 @@ import {
   ARROW_SPEED,
   BLOCK_DURABILITY,
   BLOCK_SIZE,
+  BLOCK_REPEL_SECONDS,
+  repelFromBlock,
+  survivingBlocks,
   CREEPER_BLAST_RADIUS,
   CREEPER_FUSE_RANGE,
   CREEPER_FUSE_SECONDS,
@@ -52,7 +55,7 @@ import { lovable } from "@/integrations/lovable";
 import { captureProgress, progressSchema, simulationDelta, type Progress } from "./progress";
 
 type Phase = "menu" | "day" | "night" | "levelComplete" | "gameOver";
-type Enemy = Mover & { kind: MobKind; bob: number; timer: number; fuse: number };
+type Enemy = Mover & { kind: MobKind; bob: number; timer: number; fuse: number; repelTimer: number };
 type Resource = Mover & { kind: BlockKind };
 type Block = { x: number; y: number; w: number; h: number; kind: BlockKind; hp: number; fuse: number };
 type Arrow = { x: number; y: number; w: number; h: number; vx: number; vy: number };
@@ -273,13 +276,13 @@ export function Game() {
     w.steaks = [];
     w.enemies = [];
     w.resources = [];
-    w.blocks = [];
+    w.blocks = survivingBlocks(w.blocks);
     w.arrows = [];
     w.particles = [];
     w.floaters = [];
     w.flashes = [];
     w.steakTimer = 0.3;
-    w.resourceTimer = 0.8;
+    w.resourceTimer = RESOURCE_SPAWN_MIN;
     w.steve.x = w.W / 2 - w.steve.w / 2;
     w.steve.y = w.H / 2 - w.steve.h / 2;
     w.steve.hurt = 0;
@@ -309,6 +312,7 @@ export function Game() {
     w.steaksEaten = 0;
     w.kills = 0;
     w.inventory = { wood: 0, stone: 0, iron: 0, tnt: 0 };
+    w.blocks = [];
     startDay();
   }, [settings, startDay]);
 
@@ -331,6 +335,7 @@ export function Game() {
   const restoreProgress = useCallback((snapshot: Progress) => {
     const W = world.current.W, H = world.current.H;
     const restored = structuredClone(snapshot.world);
+    restored.cfg = levelConfig(restored.level, snapshot.settings);
     for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.resources, ...restored.blocks, ...restored.arrows, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
       object.x *= W / restored.W;
       object.y *= H / restored.H;
@@ -537,7 +542,7 @@ export function Game() {
             const kind = pick(kinds);
             const size = SPRITE_SIZE[kind];
             const m = spawnMover(w.W, w.H, size.w, size.h, w.cfg.enemySpeed * rnd(0.85, 1.15), ENEMY_MAX_BOUNCES);
-            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2), timer: rnd(1, SKELETON_SHOOT_EVERY), fuse: 0 });
+            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2), timer: rnd(1, SKELETON_SHOOT_EVERY), fuse: 0, repelTimer: 0 });
           }
         }
         const scx = s.x + s.w / 2, scy = s.y + s.h / 2;
@@ -562,7 +567,11 @@ export function Game() {
         w.enemies = w.enemies.filter((e) => {
           const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
           const speed = w.cfg.enemySpeed;
-          if (e.entered && e.kind === "creeper") {
+          const repelled = e.repelTimer > 0;
+          e.repelTimer = Math.max(0, e.repelTimer - dt);
+          if (repelled) {
+            // Rebound must finish before homing or pouncing can override it.
+          } else if (e.entered && e.kind === "creeper") {
             const d = Math.hypot(scx - cx, scy - cy);
             if (e.fuse > 0 || d < CREEPER_FUSE_RANGE) {
               e.fuse += dt;
@@ -598,10 +607,9 @@ export function Game() {
             if (b.hp > 0 && b.kind !== "tnt" && overlaps(e, b, 0.05)) {
               b.hp = hitBlock(b.hp);
               burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 10, 150);
-              if (e.kind === "creeper") { explode(w, cx, cy); blasts.push({ x: cx, y: cy, from: e, r: CREEPER_BLAST_RADIUS }); if (Math.hypot(scx - cx, scy - cy) < CREEPER_BLAST_RADIUS) hurt("creeper", cx, e.y); return false; }
-              const ox = cx - (b.x + b.w / 2), oy = cy - (b.y + b.h / 2);
-              if (Math.abs(ox) / (e.w + b.w) > Math.abs(oy) / (e.h + b.h)) { e.vx = Math.sign(ox || 1) * Math.abs(e.vx || speed); e.x += Math.sign(ox || 1) * 8; }
-              else { e.vy = Math.sign(oy || 1) * Math.abs(e.vy || speed); e.y += Math.sign(oy || 1) * 8; }
+              repelFromBlock(e, b, speed);
+              e.repelTimer = BLOCK_REPEL_SECONDS;
+              e.fuse = 0;
               if (e.kind === "spider") e.timer = Math.max(e.timer, 1.2);
               break;
             }
@@ -622,7 +630,8 @@ export function Game() {
         });
         // Creeper explosions also destroy nearby mobs (and can chain into other creepers).
         for (let i = 0; i < blasts.length; i++) {
-          const bl = blasts[i]!;
+          const bl = blasts[i];
+          if (!bl) continue;
           w.enemies = w.enemies.filter((o) => {
             if (o === bl.from) return false;
             const ox = o.x + o.w / 2, oy = o.y + o.h / 2;
@@ -657,7 +666,7 @@ export function Game() {
           for (const e of w.enemies) burst(w, e.x + e.w / 2, e.y + e.h / 2, FX.bone, 6, 100);
           w.enemies = [];
           w.arrows = [];
-          w.blocks = [];
+          w.blocks = survivingBlocks(w.blocks);
           go("levelComplete");
         }
       }
@@ -960,7 +969,7 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
       if (b.hp < max - 1) { ctx.moveTo(b.x + 34, b.y + 8); ctx.lineTo(b.x + 22, b.y + 20); }
       ctx.stroke();
     }
-    for (let i = 0; i < b.hp; i++) { ctx.fillStyle = "#ffe066"; ctx.fillRect(b.x + 4 + i * 8, b.y - 8, 6, 4); }
+    for (let i = 0; i < b.hp; i++) { ctx.fillStyle = "#ffe066"; ctx.fillRect(b.x + 3 + i * 6, b.y - 8, 4, 4); }
   }
 
   for (const a of w.arrows) {

@@ -66,7 +66,7 @@ export type LevelConfig = {
 };
 
 export function enemySpeedPx(slider: number) {
-  return 40 + slider * 22;
+  return 40 + (slider + 1) * 22;
 }
 
 // ---------- Steve ----------
@@ -253,7 +253,32 @@ export const TNT_FROM_LEVEL = 5;
 /** Large so hits never remove TNT; any hit just shortens its fuse. */
 export const TNT_HP = 99;
 /** Hits a placed block absorbs before breaking. */
-export const BLOCK_DURABILITY: Record<BlockKind, number> = { wood: 1, stone: 2, iron: 3, tnt: TNT_HP };
+export const BLOCK_DURABILITY: Record<BlockKind, number> = { wood: 2, stone: 4, iron: 6, tnt: TNT_HP };
+/** Surviving blocks remain in the run across phase and level transitions. */
+export function survivingBlocks<T extends { hp: number }>(blocks: T[]): T[] {
+  return blocks.filter((block) => block.hp > 0);
+}
+export const BLOCK_REPEL_SECONDS = 0.75;
+export const BLOCK_REPEL_SPEED_MULTIPLIER = 1.8;
+export const BLOCK_REPEL_GAP = 8;
+/** Separate a mob from the block, then launch it along the outward collision normal. */
+export function repelFromBlock(m: Mover, block: Box, speed: number) {
+  const dx = m.x + m.w / 2 - (block.x + block.w / 2);
+  const dy = m.y + m.h / 2 - (block.y + block.h / 2);
+  const horizontal = Math.abs(dx) / (m.w + block.w) >= Math.abs(dy) / (m.h + block.h);
+  const launchSpeed = speed * BLOCK_REPEL_SPEED_MULTIPLIER;
+  if (horizontal) {
+    const direction = Math.sign(dx) || (m.vx > 0 ? -1 : 1);
+    m.x = direction < 0 ? block.x - m.w - BLOCK_REPEL_GAP : block.x + block.w + BLOCK_REPEL_GAP;
+    m.vx = direction * launchSpeed;
+    m.vy = 0;
+  } else {
+    const direction = Math.sign(dy) || (m.vy > 0 ? -1 : 1);
+    m.y = direction < 0 ? block.y - m.h - BLOCK_REPEL_GAP : block.y + block.h + BLOCK_REPEL_GAP;
+    m.vx = 0;
+    m.vy = direction * launchSpeed;
+  }
+}
 /** Wood from level 1, stone from level 2, iron from level 3, TNT from level 5. */
 export function resourceKindsForLevel(level: number): BlockKind[] {
   const kinds = (["wood", "stone", "iron"] as BlockKind[]).slice(0, Math.min(3, Math.max(1, Math.floor(level))));
@@ -264,10 +289,10 @@ export function resourceKindsForLevel(level: number): BlockKind[] {
 export function hitBlock(hp: number) {
   return Math.max(0, hp - 1);
 }
-export const RESOURCE_MAX_ON_SCREEN = 6;
+export const RESOURCE_MAX_ON_SCREEN = 9;
 /** Seconds between block spawns by day (random between min and max). */
-export const RESOURCE_SPAWN_MIN = 0.45;
-export const RESOURCE_SPAWN_MAX = 0.9;
+export const RESOURCE_SPAWN_MIN = 0.3;
+export const RESOURCE_SPAWN_MAX = 0.6;
 
 // ---------- Score ----------
 export const SCORE_PER_LEVEL = 100;

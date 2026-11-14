@@ -33,3 +33,4 @@ use the editor.
 - Game rules (hearts, durations, bounce counts, level scaling) live as pure functions in `src/game/rules.ts` and are tested in `src/test/game-rules.test.ts`; keep the canvas loop in `src/game/Game.tsx` free of rule constants so rules stay testable.
 - Characters and steaks are pixel maps drawn to canvas in `src/game/sprites.ts`, not image files, so they stay crisp at any scale.
 - Pause gates the entire simulation and animation clock; saved snapshots are validated in `src/game/progress.ts` and stored per signed-in player under Cloud RLS, so reloads restore the full run without sharing saves.
+- Block collision separation and phase-survival filtering use pure rules; enemy rebound timers are saved with backward-compatible defaults so chasing AI cannot immediately cancel shield rebounds.

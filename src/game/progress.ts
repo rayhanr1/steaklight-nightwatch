@@ -12,7 +12,7 @@ export const progressSchema = z.object({
     W: number.positive(), H: number.positive(), phase: z.enum(["day", "night", "levelComplete"]), level: number.int().positive(), hearts: number.positive().transform(clampHearts), timeLeft: number,
     cfg: z.object({ dayDuration: number, nightDuration: number, enemySpawnInterval: number, enemiesPerWave: number, enemySpeed: number }),
     steve: z.object({ x: number, y: number, w: number, h: number, facing: z.union([z.literal(1), z.literal(-1)]), hurt: number, walk: number }),
-    steaks: z.array(mover.extend({ spin: number })), enemies: z.array(mover.extend({ kind: z.enum(["skeleton", "creeper", "zombie", "spider"]), bob: number, timer: number, fuse: number })),
+    steaks: z.array(mover.extend({ spin: number })), enemies: z.array(mover.extend({ kind: z.enum(["skeleton", "creeper", "zombie", "spider"]), bob: number, timer: number, fuse: number, repelTimer: number.nonnegative().default(0) })),
     resources: z.array(mover.extend({ kind: blockKind })), blocks: z.array(z.object({ x: number, y: number, w: number, h: number, kind: blockKind, hp: number, fuse: number.default(0) })),
     arrows: z.array(z.object({ x: number, y: number, w: number, h: number, vx: number, vy: number })),
     inventory: z.object({ wood: number.int().nonnegative(), stone: number.int().nonnegative(), iron: number.int().nonnegative(), tnt: number.int().nonnegative().default(0) }),

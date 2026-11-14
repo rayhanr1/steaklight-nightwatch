@@ -5,6 +5,11 @@ import {
   MAX_HEARTS,
   HEARTS_PER_ROW,
   BLOCK_DURABILITY,
+  enemySpeedPx,
+  survivingBlocks,
+  repelFromBlock,
+  RESOURCE_SPAWN_MIN,
+  RESOURCE_SPAWN_MAX,
   hitBlock,
   mobKindsForLevel,
   resourceKindsForLevel,
@@ -64,11 +69,44 @@ describe("game rules", () => {
     expect(levelConfig(6, DEFAULT_SETTINGS).nightDuration).toBe(20);
   });
 
-  it("wood breaks in 1 hit, stone in 2, iron in 3", () => {
-    expect(BLOCK_DURABILITY).toMatchObject({ wood: 1, stone: 2, iron: 3 });
-    expect(hitBlock(BLOCK_DURABILITY.wood)).toBe(0);
-    expect(hitBlock(hitBlock(BLOCK_DURABILITY.stone))).toBe(0);
-    expect(hitBlock(hitBlock(BLOCK_DURABILITY.iron))).toBe(1);
+  it("wood lasts 2 hits, stone 4, iron 6", () => {
+    expect(BLOCK_DURABILITY).toMatchObject({ wood: 2, stone: 4, iron: 6 });
+    for (const kind of ["wood", "stone", "iron"] as const) {
+      let hp = BLOCK_DURABILITY[kind];
+      for (let i = 1; i < BLOCK_DURABILITY[kind]; i++) hp = hitBlock(hp);
+      expect(hp).toBe(1);
+      expect(hitBlock(hp)).toBe(0);
+    }
+  });
+
+  it("retains surviving blocks through day/night transitions without repairing them", () => {
+    const wood = { hp: 1 }, iron = { hp: 5 }, broken = { hp: 0 };
+    const nextDay = survivingBlocks(survivingBlocks([wood, iron, broken]));
+    expect(nextDay).toEqual([wood, iron]);
+    expect(nextDay[0]).toBe(wood);
+  });
+
+  it("shifts every enemy speed setting up one step while keeping default 5", () => {
+    expect(DEFAULT_SETTINGS.enemySpeed).toBe(5);
+    expect(enemySpeedPx(5)).toBe(172);
+    expect(enemySpeedPx(1)).toBe(84);
+    expect(enemySpeedPx(10)).toBe(282);
+    expect(levelConfig(1, DEFAULT_SETTINGS).enemySpeed).toBe(172);
+  });
+
+  it("blocks forcibly repel enemies away from every collision side", () => {
+    const block = { x: 100, y: 100, w: 40, h: 40 };
+    for (const [x, y, vx, vy, expectedVx, expectedVy] of [
+      [80, 110, 100, 0, -180, 0], [130, 110, -100, 0, 180, 0],
+      [110, 80, 0, 100, 0, -180], [110, 130, 0, -100, 0, 180],
+    ] as const) {
+      const mob: Mover = { x, y, w: 20, h: 20, vx, vy, bounces: 0, maxBounces: 2, entered: true };
+      repelFromBlock(mob, block, 100);
+      expect(mob.vx).toBe(expectedVx);
+      expect(mob.vy).toBe(expectedVy);
+      expect(mob.x + mob.w <= block.x || mob.x >= block.x + block.w || mob.y + mob.h <= block.y || mob.y >= block.y + block.h).toBe(true);
+      expect(mob.bounces).toBe(0);
+    }
   });
 
   it("unlocks stone on level 2 and iron on level 3", () => {
@@ -192,6 +230,8 @@ describe("tnt and block supply", () => {
     expect(TNT_FUSE_SECONDS).toBe(1);
   });
   it("more blocks can float by during the day", () => {
-    expect(RESOURCE_MAX_ON_SCREEN).toBeGreaterThan(3);
+    expect(RESOURCE_MAX_ON_SCREEN).toBe(9);
+    expect(RESOURCE_SPAWN_MIN).toBe(0.3);
+    expect(RESOURCE_SPAWN_MAX).toBe(0.6);
   });
 });
