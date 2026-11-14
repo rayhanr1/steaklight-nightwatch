@@ -131,6 +131,23 @@ describe("steak supply", () => {
   it("steaks spawn faster from level 5", () => {
     expect(steakConfig(5).spawnMax).toBeLessThan(steakConfig(4).spawnMax);
   });
+  it("steak growth stops at level 10", () => {
+    expect(steakConfig(10)).toEqual(steakConfig(11));
+    expect(steakConfig(12)).toEqual(steakConfig(10));
+  });
+});
+
+import { STEVE_SPEED_BASE, steveSpeed } from "@/game/rules";
+describe("steve speed", () => {
+  it("stays at base speed through level 9", () => {
+    for (const level of [1, 5, 9]) {
+      expect(steveSpeed(level)).toBe(STEVE_SPEED_BASE);
+    }
+  });
+  it("steve gets faster from level 10, and faster each level after", () => {
+    expect(steveSpeed(10)).toBeGreaterThan(STEVE_SPEED_BASE);
+    expect(steveSpeed(11)).toBeGreaterThan(steveSpeed(10));
+  });
 });
 describe("tnt and block supply", () => {
   it("tnt only appears from level 5", () => {

@@ -39,6 +39,7 @@ import {
   STARTING_HEARTS,
   steakConfig,
   stepMover,
+  steveSpeed,
   type LevelConfig,
   type Mover,
   type Settings,
@@ -91,7 +92,7 @@ export type World = {
 
 type Hud = { hearts: number; level: number; timeLeft: number; total: number; steaks: number; wood: number; stone: number; iron: number; tnt: number; kills: number };
 
-const STEVE_SPEED = 330;
+
 // In-game art colors (canvas), not UI theme colors.
 const FX = {
   steak: ["#f5c16b", "#ffe9a8", "#c8742e"],
@@ -296,7 +297,7 @@ export function Game() {
     w.timeLeft = w.cfg.nightDuration;
     w.enemyTimer = 0.8;
     setNight(true);
-    showBanner("Night falls", "Space to swing · 1/2/3 to place blocks");
+    showBanner("Night falls", "Space to swing · Z/X/C to place blocks");
     go("night");
   }, [go]);
 
@@ -477,8 +478,9 @@ export function Game() {
       }
       const len = Math.hypot(dx, dy);
       if (len > 0) {
-        s.x += (dx / len) * STEVE_SPEED * dt;
-        s.y += (dy / len) * STEVE_SPEED * dt;
+        const spd = steveSpeed(w.level);
+        s.x += (dx / len) * spd * dt;
+        s.y += (dy / len) * spd * dt;
         if (dx) s.facing = dx > 0 ? 1 : -1;
         s.walk += dt * 12;
       }
@@ -746,7 +748,7 @@ export function Game() {
             <HeartsRow hearts={hud.hearts} />
             <div className="mt-3 flex gap-3 font-display text-[10px] text-foreground">
               {(["wood", "stone", "iron", "tnt"] as const).filter((k) => k !== "tnt" || hud.tnt > 0 || hud.level >= 5).map((k, i) => (
-                <span key={k} className="flex items-center gap-1" title={`${k} (press ${i + 1})`}>
+                <span key={k} className="flex items-center gap-1" title={`${k} (press ${["Z", "X", "C", "V"][i]})`}>
                   <span className={cn("inline-block h-4 w-4 border-2 border-border", k === "wood" ? "bg-block-wood" : k === "stone" ? "bg-block-stone" : k === "iron" ? "bg-block-iron" : "bg-block-tnt")} />
                   {hud[k]}
                 </span>
@@ -828,7 +830,7 @@ export function Game() {
             Start new game
           </button>
           <p className="mt-4 text-center text-xl leading-tight text-muted-foreground">
-            Arrows/WASD move · Space swings sword · 1/2/3 place wood/stone/iron where you stand · 4 or V drops TNT (level 5+)
+            Arrows/WASD move · Space swings sword · Z/X/C place wood/stone/iron where you stand · V drops TNT (level 5+)
           </p>
         </Overlay>
       )}

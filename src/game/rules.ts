@@ -30,6 +30,8 @@ export const STEAK_SPAWN_MIN = 0.9;
 export const STEAK_SPAWN_MAX = 1.8;
 /** From this level on, more steaks float by and they spawn faster. */
 export const STEAK_RAMP_FROM_LEVEL = 5;
+/** Steak growth stops here; longer days even it out from this level on. */
+export const STEAK_RAMP_UNTIL_LEVEL = 10;
 /** Extra steaks allowed on screen per level past the ramp start. */
 export const STEAK_MAX_GROWTH_PER_LEVEL = 2;
 
@@ -39,9 +41,12 @@ export type SteakConfig = {
   spawnMax: number;
 };
 
-/** Steaks stay at the base rate through level 4, then ramp up each level. */
+/** Steaks stay at the base rate through level 4, ramp up each level, and stop growing at level 10. */
 export function steakConfig(level: number): SteakConfig {
-  const n = Math.max(0, Math.floor(level) - (STEAK_RAMP_FROM_LEVEL - 1));
+  const n = Math.max(
+    0,
+    Math.min(Math.floor(level), STEAK_RAMP_UNTIL_LEVEL) - (STEAK_RAMP_FROM_LEVEL - 1),
+  );
   const scale = Math.pow(0.85, n);
   return {
     maxOnScreen: STEAK_MAX_ON_SCREEN + n * STEAK_MAX_GROWTH_PER_LEVEL,
@@ -62,6 +67,20 @@ export type LevelConfig = {
 
 export function enemySpeedPx(slider: number) {
   return 40 + slider * 22;
+}
+
+// ---------- Steve ----------
+/** Steve's base speed in px per second. */
+export const STEVE_SPEED_BASE = 330;
+/** From this level on, Steve moves faster to keep up with the mobs. */
+export const STEVE_SPEEDUP_FROM_LEVEL = 10;
+/** Extra speed per level past the speedup start, as a fraction of base speed. */
+export const STEVE_SPEEDUP_PER_LEVEL = 0.05;
+
+/** Steve's speed for a level: flat through level 9, then +5% per level. */
+export function steveSpeed(level: number) {
+  const n = Math.max(0, Math.floor(level) - (STEVE_SPEEDUP_FROM_LEVEL - 1));
+  return STEVE_SPEED_BASE * (1 + n * STEVE_SPEEDUP_PER_LEVEL);
 }
 
 export function levelConfig(level: number, settings: Settings): LevelConfig {
