@@ -144,9 +144,10 @@ describe("steak supply", () => {
   it("steaks spawn faster from level 5", () => {
     expect(steakConfig(5).spawnMax).toBeLessThan(steakConfig(4).spawnMax);
   });
-  it("steak growth stops at level 10", () => {
-    expect(steakConfig(10)).toEqual(steakConfig(11));
-    expect(steakConfig(12)).toEqual(steakConfig(10));
+  it("steak supply keeps growing beyond level 10 without a level cap", () => {
+    expect(steakConfig(11).maxOnScreen).toBe(29);
+    expect(steakConfig(12).maxOnScreen).toBe(32);
+    expect(steakConfig(50).maxOnScreen).toBe(146);
   });
 });
 
