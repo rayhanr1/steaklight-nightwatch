@@ -208,8 +208,10 @@
   animation: mist 28s linear infinite;
 }
 
-@utility ken-burns {
-  animation: kenburns 40s ease-in-out infinite alternate;
+.game-paused .night-stars,
+.game-paused .night-mist,
+.game-paused .banner-fade {
+  animation-play-state: paused;
 }
 
 @utility pop-in {
@@ -227,10 +229,6 @@
 @keyframes mist {
   from { background-position: 0% 0; }
   to { background-position: -200% 0; }
-}
-@keyframes kenburns {
-  from { transform: scale(1.02); }
-  to { transform: scale(1.1) translate(-1%, 1%); }
 }
 @keyframes popin {
   from { transform: scale(0.6); opacity: 0; }

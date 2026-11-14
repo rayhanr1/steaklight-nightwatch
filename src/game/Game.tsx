@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import dayVideo from "@/assets/forest-day.mp4.asset.json";
+import dayVideo from "@/assets/forest-day-stable.mp4.asset.json";
 import dayImg from "@/assets/forest-day.jpg";
 import nightImg from "@/assets/forest-night.jpg";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,11 @@ import {
   type Settings,
 } from "./rules";
 import { buildSprites, SPRITE_SIZE, type SpriteSet } from "./sprites";
+import { Button } from "@/components/ui/button";
+import { Pause, Play, Save, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
+import { captureProgress, progressSchema, simulationDelta, type Progress } from "./progress";
 
 type Phase = "menu" | "day" | "night" | "levelComplete" | "gameOver";
 type EnemyKind = "skeleton" | "creeper";
@@ -32,7 +37,7 @@ type Particle = { x: number; y: number; vx: number; vy: number; life: number; ma
 type Floater = { x: number; y: number; text: string; life: number; color: string };
 type Flash = { x: number; y: number; life: number; max: number };
 
-type World = {
+export type World = {
   W: number;
   H: number;
   phase: Phase;
@@ -72,6 +77,15 @@ const fmtTime = (s: number) => {
 
 export function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const pausedRef = useRef(false);
+  const animationTime = useRef(0);
+  const [paused, setPaused] = useState(false);
+  const [saved, setSaved] = useState<Progress | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmQuit, setConfirmQuit] = useState(false);
   const settingsRef = useRef<Settings>(DEFAULT_SETTINGS);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [phase, setPhase] = useState<Phase>("menu");
@@ -79,6 +93,24 @@ export function Game() {
   const [banner, setBanner] = useState<{ text: string; sub: string; key: number } | null>(null);
   const [hud, setHud] = useState<Hud>({ hearts: STARTING_HEARTS, level: 1, timeLeft: 0, total: 1, steaks: 0 });
   const keys = useRef(new Set<string>());
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUserId(session?.user.id ?? null));
+    void supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user.id ?? null));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setSaved(null);
+    if (userId) void supabase.from("saved_games").select("snapshot").eq("user_id", userId).maybeSingle().then(({ data, error }) => {
+      if (!active) return;
+      if (error) { setSaveMessage("Couldn't load saved progress. Try again later."); return; }
+      const result = progressSchema.safeParse(data?.snapshot);
+      if (result.success) setSaved(result.data);
+    });
+    return () => { active = false; };
+  }, [userId]);
 
   const world = useRef<World>({
     W: 1280,
@@ -100,6 +132,38 @@ export function Game() {
     steaksEaten: 0,
     pointer: null,
   });
+
+  const changePause = useCallback((value: boolean) => {
+    pausedRef.current = value;
+    setPaused(value);
+    keys.current.clear();
+    world.current.pointer = null;
+    const video = videoRef.current;
+    if (value) video?.pause();
+    else void video?.play().catch(() => {});
+    setConfirmQuit(false);
+  }, []);
+
+  const saveProgress = async () => {
+    if (!userId) return;
+    setSaving(true);
+    setSaveMessage("");
+    try {
+      const snapshot = captureProgress(world.current, settingsRef.current, animationTime.current, videoRef.current?.currentTime ?? 0);
+      const { error } = await supabase.from("saved_games").upsert({ user_id: userId, snapshot: JSON.parse(JSON.stringify(snapshot)), updated_at: new Date().toISOString() });
+      if (error) throw error;
+      setSaved(snapshot);
+      setSaveMessage("Progress saved.");
+    } catch { setSaveMessage("Couldn't save progress. Your game is still paused; try again."); }
+    finally { setSaving(false); }
+  };
+
+  const signInToSave = async () => {
+    // Keep the paused run through a full-page sign-in round trip; Cloud is the durable save.
+    sessionStorage.setItem("pending-game-save", JSON.stringify(captureProgress(world.current, settingsRef.current, animationTime.current, videoRef.current?.currentTime ?? 0)));
+    const result = await lovable.auth.signInWithOAuth("lovable", { redirect_uri: window.location.origin });
+    if (result.error) setSaveMessage("Sign-in didn't finish. Your game is still paused.");
+  };
 
   const pushHud = useCallback(() => {
     const w = world.current;
@@ -128,6 +192,7 @@ export function Game() {
   const showBanner = (text: string, sub: string) => setBanner({ text, sub, key: Date.now() });
 
   const startDay = useCallback(() => {
+    changePause(false);
     const w = world.current;
     w.cfg = levelConfig(w.level, settingsRef.current);
     w.timeLeft = w.cfg.dayDuration;
@@ -144,7 +209,7 @@ export function Game() {
     showBanner(`Level ${w.level} · Day`, "Grab the steaks!");
     (document.activeElement as HTMLElement | null)?.blur?.();
     go("day");
-  }, [go]);
+  }, [go, changePause]);
 
   const startNight = useCallback(() => {
     const w = world.current;
@@ -172,26 +237,66 @@ export function Game() {
   }, [startDay]);
 
   const toMenu = useCallback(() => {
+    changePause(false);
+    setSaveMessage("");
     const w = world.current;
     w.enemies = [];
     w.steaks = [];
     setNight(false);
     setBanner(null);
     go("menu");
-  }, [go]);
+  }, [go, changePause]);
+
+  const restoreProgress = useCallback((snapshot: Progress) => {
+    const W = world.current.W, H = world.current.H;
+    const restored = structuredClone(snapshot.world);
+    for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
+      object.x *= W / restored.W;
+      object.y *= H / restored.H;
+    }
+    world.current = { ...restored, W, H };
+    settingsRef.current = snapshot.settings;
+    setSettings(snapshot.settings);
+    animationTime.current = snapshot.animationTime;
+    if (videoRef.current) videoRef.current.currentTime = snapshot.videoTime;
+    setNight(snapshot.world.phase !== "day");
+    setBanner(null);
+    go(snapshot.world.phase);
+    changePause(true);
+  }, [go, changePause]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const raw = sessionStorage.getItem("pending-game-save");
+    if (!raw) return;
+    sessionStorage.removeItem("pending-game-save");
+    try {
+      const result = progressSchema.safeParse(JSON.parse(raw));
+      if (result.success && world.current.phase === "menu") restoreProgress(result.data);
+    } catch { /* Ignore an incomplete sign-in handoff. */ }
+  }, [userId, restoreProgress]);
 
   // Keyboard
   useEffect(() => {
     const MOVE = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"];
     const down = (e: KeyboardEvent) => {
       const p = world.current.phase;
+      if (e.key === "Escape" && (p === "day" || p === "night")) {
+        e.preventDefault();
+        changePause(!pausedRef.current);
+        return;
+      }
+      if (pausedRef.current) return;
       if (MOVE.includes(e.key) && (p === "day" || p === "night")) {
         e.preventDefault();
         keys.current.add(e.key.toLowerCase());
       }
     };
     const up = (e: KeyboardEvent) => keys.current.delete(e.key.toLowerCase());
-    const blur = () => keys.current.clear();
+    const blur = () => {
+      keys.current.clear();
+      if (world.current.phase === "day" || world.current.phase === "night") changePause(true);
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
@@ -200,12 +305,14 @@ export function Game() {
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
     };
-  }, []);
+  }, [changePause]);
 
   // Game loop
   useEffect(() => {
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     const sprites = buildSprites();
     const w = world.current;
 
@@ -229,10 +336,12 @@ export function Game() {
     let last = performance.now();
     let hudTick = 0;
     const frame = (t: number) => {
-      const dt = Math.min(0.05, (t - last) / 1000);
+      const dt = simulationDelta(pausedRef.current, (t - last) / 1000);
       last = t;
+      if (pausedRef.current) { raf = requestAnimationFrame(frame); return; }
+      animationTime.current += dt;
       update(dt);
-      draw(ctx, sprites, w, t / 1000);
+      draw(ctx, sprites, world.current, animationTime.current);
       hudTick += dt;
       if (hudTick > 0.1) {
         hudTick = 0;
@@ -242,6 +351,7 @@ export function Game() {
     };
 
     const update = (dt: number) => {
+      const w = world.current;
       // effects always animate
       w.particles = w.particles.filter((p) => {
         p.life -= dt;
@@ -365,9 +475,10 @@ export function Game() {
   const nextNight = levelConfig(hud.level + 1, settingsRef.current).nightDuration;
 
   return (
-    <div className="relative h-dvh w-full select-none overflow-hidden bg-night">
+    <div className={cn("relative h-dvh w-full select-none overflow-hidden bg-night", paused && "game-paused")}>
       {/* Background: day video crossfades to the night scene */}
       <video
+        ref={videoRef}
         src={dayVideo.url}
         poster={dayImg}
         autoPlay
@@ -385,7 +496,7 @@ export function Game() {
           night ? "opacity-100" : "opacity-0",
         )}
       >
-        <img src={nightImg} alt="" width={1920} height={1088} className="ken-burns absolute inset-0 h-full w-full object-cover" />
+        <img src={nightImg} alt="" width={1920} height={1088} className="absolute inset-0 h-full w-full object-cover" />
         <div className="night-stars absolute inset-x-0 top-0 h-1/2" />
         <div className="night-mist absolute inset-x-0 bottom-0 h-1/2" />
       </div>
@@ -399,13 +510,35 @@ export function Game() {
       <canvas
         ref={canvasRef}
         className="pixelated absolute inset-0 touch-none"
-        onPointerDown={(e) => (world.current.pointer = { x: e.clientX, y: e.clientY })}
+        onPointerDown={(e) => { if (!pausedRef.current) world.current.pointer = { x: e.clientX, y: e.clientY }; }}
         onPointerMove={(e) => {
           if (world.current.pointer) world.current.pointer = { x: e.clientX, y: e.clientY };
         }}
         onPointerUp={() => (world.current.pointer = null)}
         onPointerLeave={() => (world.current.pointer = null)}
       />
+
+      {playing && !paused && (
+        <Button variant="secondary" size="icon" aria-label="Pause game" title="Pause game" onClick={() => changePause(true)} className="pixel-button absolute bottom-4 right-4 h-12 w-12 rounded-none"><Pause /></Button>
+      )}
+      {paused && (
+        <Overlay>
+          <h2 className="text-center font-display text-2xl text-accent text-pixel-shadow">Paused</h2>
+          <p className="mt-4 text-center text-2xl text-muted-foreground">Level {hud.level} · {night ? "Night" : "Day"} · {fmtTime(hud.timeLeft)}</p>
+          <div className="mt-6 space-y-3">
+            <Button onClick={() => changePause(false)} disabled={saving} className="pixel-button h-auto w-full rounded-none py-4"><Play /> Resume</Button>
+            <Button onClick={userId ? saveProgress : signInToSave} disabled={saving} className="pixel-button h-auto w-full rounded-none py-4"><Save /> {saving ? "Saving…" : userId ? "Save progress" : "Sign in to save"}</Button>
+            {saveMessage && <p role="status" className="text-center text-xl text-accent">{saveMessage}</p>}
+            {confirmQuit ? (
+              <div className="space-y-3">
+                <p className="text-center text-xl text-muted-foreground">Quit this run? Unsaved progress will be lost.</p>
+                <Button variant="destructive" onClick={toMenu} className="h-auto w-full rounded-none py-3">Quit to menu</Button>
+                <Button variant="ghost" onClick={() => setConfirmQuit(false)} className="w-full">Cancel</Button>
+              </div>
+            ) : <Button variant="ghost" onClick={() => setConfirmQuit(true)} disabled={saving} className="h-auto w-full py-3"><LogOut /> Quit game</Button>}
+          </div>
+        </Overlay>
+      )}
 
       {/* HUD */}
       {phase !== "menu" && (
@@ -443,7 +576,7 @@ export function Game() {
       )}
 
       {/* Overlays */}
-      {phase === "menu" && (
+      {phase === "menu" && !paused && (
         <Overlay>
           <h1 className="text-center font-display text-2xl leading-relaxed text-accent text-pixel-shadow sm:text-3xl">
             Steak &amp; Survive
@@ -451,6 +584,7 @@ export function Game() {
           <p className="mt-2 text-center text-2xl leading-tight text-muted-foreground">
             Eat steaks by day. Dodge skeletons and creepers by night.
           </p>
+          {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full rounded-none py-3"><Play /> Continue saved game · Level {saved.world.level}</Button>}
           <div className="mt-6 space-y-5">
             <PixelSlider
               label="Enemy speed"
@@ -490,7 +624,7 @@ export function Game() {
         </Overlay>
       )}
 
-      {phase === "levelComplete" && (
+      {phase === "levelComplete" && !paused && (
         <Overlay>
           <h2 className="text-center font-display text-xl leading-relaxed text-primary text-pixel-shadow sm:text-2xl">
             Level {hud.level} complete
@@ -527,8 +661,8 @@ export function Game() {
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4">
-      <div className="pixel-panel pop-in w-full max-w-md px-6 py-7 sm:px-8">{children}</div>
+    <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+      <div className="pixel-panel pop-in my-auto w-full max-w-md px-6 py-7 sm:px-8">{children}</div>
     </div>
   );
 }
