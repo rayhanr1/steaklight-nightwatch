@@ -546,7 +546,7 @@ export function Game() {
           w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
         };
         const blasts: { x: number; y: number; from: Enemy | null; r: number }[] = [];
-        // TNT: any hit shortens the fuse; on detonation it hurts Steve if close and cracks nearby blocks.
+        // TNT: any hit shortens the fuse; on detonation it never hurts Steve, but cracks nearby blocks.
         for (const b of w.blocks) {
           if (b.kind !== "tnt" || b.hp <= 0) continue;
           if (b.hp < TNT_HP) { b.fuse = Math.min(b.fuse, 0.12); b.hp = TNT_HP; }
@@ -556,7 +556,6 @@ export function Game() {
           b.hp = 0;
           explode(w, bx, by);
           blasts.push({ x: bx, y: by, from: null, r: TNT_BLAST_RADIUS });
-          if (Math.hypot(scx - bx, scy - by) < TNT_BLAST_RADIUS) hurt("creeper", bx, b.y);
           for (const o of w.blocks) if (o !== b && o.hp > 0 && Math.hypot(o.x + o.w / 2 - bx, o.y + o.h / 2 - by) < TNT_BLAST_RADIUS) o.hp = hitBlock(o.hp);
         }
         w.enemies = w.enemies.filter((e) => {
