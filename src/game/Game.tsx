@@ -880,7 +880,7 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
   for (const a of w.arrows) {
     const ang = Math.atan2(a.vy, a.vx);
     ctx.save();
-    ctx.translate(a.x, a.y);
+    ctx.translate(Math.round(a.x), Math.round(a.y));
     ctx.rotate(ang);
     ctx.fillStyle = "#6e4c22"; ctx.fillRect(-14, -1, 20, 3);
     ctx.fillStyle = "#d8d8d8"; ctx.fillRect(6, -3, 5, 7);
@@ -954,9 +954,9 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
   for (const f of w.floaters) {
     ctx.globalAlpha = Math.min(1, f.life * 2);
     ctx.fillStyle = "#1a1a1a";
-    ctx.fillText(f.text, f.x + 2, f.y + 2);
+    ctx.fillText(f.text, Math.round(f.x) + 2, Math.round(f.y) + 2);
     ctx.fillStyle = f.color;
-    ctx.fillText(f.text, f.x, f.y);
+    ctx.fillText(f.text, Math.round(f.x), Math.round(f.y));
   }
   ctx.globalAlpha = 1;
   ctx.restore();
