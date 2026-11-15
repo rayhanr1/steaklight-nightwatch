@@ -6,6 +6,16 @@ import { HeartsRow } from "./PixelHeart";
 import { PixelSlider } from "./PixelSlider";
 import {
   applyContact,
+  remainingSteaks,
+  endermanSpawnDelay,
+  ENDERMAN_HP,
+  ENDERMAN_SPEED_MULTIPLIER,
+  ENDERMAN_ATTACK_RANGE,
+  ENDERMAN_WINDUP_SECONDS,
+  hitEnderman,
+  stepEnderman,
+  mobAffectedByExplosion,
+  type EndermanCombat,
   mergeHighScore,
   runScore,
   type HighScore,
@@ -53,7 +63,7 @@ import { lovable } from "@/integrations/lovable";
 import { captureProgress, progressSchema, simulationDelta, type Progress } from "./progress";
 
 type Phase = "menu" | "day" | "night" | "levelComplete" | "gameOver";
-type Enemy = Mover & { kind: MobKind; bob: number; timer: number; fuse: number; repelTimer: number };
+type Enemy = Mover & EndermanCombat & { kind: MobKind; bob: number; timer: number; fuse: number; repelTimer: number };
 type Resource = Mover & { kind: BlockKind };
 type Block = { x: number; y: number; w: number; h: number; kind: BlockKind; hp: number; fuse: number };
 type Arrow = { x: number; y: number; w: number; h: number; vx: number; vy: number };
@@ -79,6 +89,8 @@ export type World = {
   inventory: Record<BlockKind, number>;
   swing: number;
   swingCooldown: number;
+  swingId: number;
+  endermanTimer: number;
   resourceTimer: number;
   kills: number;
   particles: Particle[];
@@ -202,6 +214,8 @@ export function Game() {
     inventory: { wood: 0, stone: 0, iron: 0, tnt: 0 },
     swing: 0,
     swingCooldown: 0,
+    swingId: 0,
+    endermanTimer: -1,
     resourceTimer: 1,
     kills: 0,
     particles: [],
@@ -297,6 +311,7 @@ export function Game() {
     w.resources = [];
     w.timeLeft = w.cfg.nightDuration;
     w.enemyTimer = 0.8;
+    w.endermanTimer = endermanSpawnDelay(w.level, w.cfg.nightDuration, Math.random());
     setNight(true);
     showBanner("Night falls", "Space to swing · Z/X/C to place blocks");
     go("night");
@@ -335,6 +350,8 @@ export function Game() {
     const restored = structuredClone(snapshot.world);
     restored.cfg = levelConfig(restored.level, snapshot.settings);
     restored.timeLeft = Math.min(restored.timeLeft, restored.phase === "day" ? restored.cfg.dayDuration : restored.cfg.nightDuration);
+    restored.steaks = remainingSteaks(restored.steaks, restored.hearts);
+    if (restored.endermanTimer === -2) restored.endermanTimer = restored.phase === "night" && !restored.enemies.some((e) => e.kind === "enderman") ? endermanSpawnDelay(restored.level, restored.timeLeft, Math.random()) : -1;
     for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.resources, ...restored.blocks, ...restored.arrows, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
       object.x *= W / restored.W;
       object.y *= H / restored.H;
@@ -406,9 +423,9 @@ export function Game() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const sprites = buildSprites();
-    const w = world.current;
 
     const resize = () => {
+      const w = world.current;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       w.W = window.innerWidth;
       w.H = window.innerHeight;
@@ -509,6 +526,7 @@ export function Game() {
           w.steaks.push({ ...m, spin: rnd(-2, 2) });
         }
         w.steaks = w.steaks.filter((st) => {
+          if (!daySupply(w.level, w.hearts).spawnSteaks) return false;
           if (!stepMover(st, dt, w.W, w.H)) return false;
           if (overlaps(s, st, 0.1)) {
             w.hearts = applyContact(w.hearts, "steak");
@@ -519,6 +537,7 @@ export function Game() {
           }
           return true;
         });
+        w.steaks = remainingSteaks(w.steaks, w.hearts);
         w.resourceTimer -= dt;
         const blocks = daySupply(w.level, w.hearts);
         w.resourceTimer = Math.min(w.resourceTimer, blocks.blockSpawnMax);
@@ -547,6 +566,15 @@ export function Game() {
         w.blocks = survivingBlocks(w.blocks);
         if (w.timeLeft <= 0) startNight();
       } else {
+        if (w.endermanTimer >= 0) {
+          w.endermanTimer -= dt;
+          if (w.endermanTimer <= 0) {
+            w.endermanTimer = -1;
+            const size = SPRITE_SIZE.enderman;
+            const m = spawnMover(w.W, w.H, size.w, size.h, w.cfg.enemySpeed * ENDERMAN_SPEED_MULTIPLIER, ENEMY_MAX_BOUNCES);
+            w.enemies.push({ ...m, kind: "enderman", bob: 0, timer: 0, fuse: 0, repelTimer: 0, hp: ENDERMAN_HP, attackPhase: "chase", attackTimer: 0, lastSwordSwing: -1 });
+          }
+        }
         w.enemyTimer -= dt;
         if (w.enemyTimer <= 0) {
           w.enemyTimer = w.cfg.enemySpawnInterval * rnd(0.8, 1.2);
@@ -555,14 +583,14 @@ export function Game() {
             const kind = pick(kinds);
             const size = SPRITE_SIZE[kind];
             const m = spawnMover(w.W, w.H, size.w, size.h, w.cfg.enemySpeed * rnd(0.85, 1.15), ENEMY_MAX_BOUNCES);
-            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2), timer: rnd(1, SKELETON_SHOOT_EVERY), fuse: 0, repelTimer: 0 });
+            w.enemies.push({ ...m, kind, bob: rnd(0, Math.PI * 2), timer: rnd(1, SKELETON_SHOOT_EVERY), fuse: 0, repelTimer: 0, hp: ENDERMAN_HP, attackPhase: "chase", attackTimer: 0, lastSwordSwing: -1 });
           }
         }
         const scx = s.x + s.w / 2, scy = s.y + s.h / 2;
         const hurt = (kind: Parameters<typeof applyContact>[1], x: number, y: number) => {
           w.hearts = applyContact(w.hearts, kind);
           s.hurt = 0.6;
-          w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
+          w.floaters.push({ x: x - 10, y, text: kind === "enderman" ? "-2" : kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
         };
         const blasts: { x: number; y: number; from: Enemy | null; r: number }[] = [];
         const detonateTnt = () => {
@@ -581,7 +609,26 @@ export function Game() {
           const speed = w.cfg.enemySpeed;
           const repelled = e.repelTimer > 0;
           e.repelTimer = Math.max(0, e.repelTimer - dt);
-          if (repelled) {
+          if (e.kind === "enderman" && e.entered) {
+            // Sword damage precedes the swipe so a final timely slash wins.
+            if (w.swing > 0 && swordHits(s, s.facing, e)) {
+              const hit = hitEnderman(e, w.swingId);
+              if (hit.hp !== e.hp) {
+                Object.assign(e, hit);
+                burst(w, cx, cy, FX.bone, 8, 120);
+              }
+              if (e.hp <= 0) { w.kills += 1; burst(w, cx, cy, FX.bone, 18, 200); return false; }
+            }
+            const attack = stepEnderman(e, Math.hypot(scx - cx, scy - cy), dt);
+            Object.assign(e, attack.state);
+            if (attack.swipe) { hurt("enderman", cx, e.y); w.shake = 8; }
+            if (e.attackPhase !== "chase") { e.vx = 0; e.vy = 0; }
+            else if (!repelled) {
+              const d = Math.hypot(scx - cx, scy - cy) || 1;
+              e.vx = (scx - cx) / d * speed * ENDERMAN_SPEED_MULTIPLIER;
+              e.vy = (scy - cy) / d * speed * ENDERMAN_SPEED_MULTIPLIER;
+            }
+          } else if (repelled) {
             // Rebound must finish before homing or pouncing can override it.
           } else if (e.entered && e.kind === "creeper") {
             const d = Math.hypot(scx - cx, scy - cy);
@@ -627,13 +674,13 @@ export function Game() {
               break;
             }
           }
-          if (w.swing > 0 && swordHits(s, s.facing, e)) {
+          if (e.kind !== "enderman" && w.swing > 0 && swordHits(s, s.facing, e)) {
             w.kills += 1;
             burst(w, cx, cy, e.kind === "skeleton" ? FX.bone : FX.mob, 16, 220);
             w.floaters.push({ x: cx - 10, y: e.y, text: "POW", life: 0.7, color: "#ffe066" });
             return false;
           }
-          if (e.kind !== "creeper" && overlaps(s, e)) {
+          if (e.kind !== "creeper" && e.kind !== "enderman" && overlaps(s, e)) {
             hurt(e.kind, cx, e.y);
             burst(w, cx, cy, e.kind === "skeleton" ? FX.bone : FX.mob, 18, 200);
             w.shake = 6;
@@ -656,6 +703,7 @@ export function Game() {
           const bl = blasts[i];
           if (!bl) continue;
           w.enemies = w.enemies.filter((o) => {
+            if (!mobAffectedByExplosion(o.kind)) return true;
             if (o === bl.from) return false;
             const ox = o.x + o.w / 2, oy = o.y + o.h / 2;
             if (Math.hypot(ox - bl.x, oy - bl.y) >= bl.r) return true;
@@ -815,7 +863,7 @@ export function Game() {
             Eat steaks and gather blocks by day. Fight or wall off the mobs by night.
           </p>
           {best.score > 0 && <p className="mt-3 text-center font-display text-[10px] text-accent">High score {best.score} · Best level {best.level}</p>}
-          {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full rounded-none py-3"><Play /> Continue saved game · Level {saved.world.level}</Button>}
+          {saved && <Button onClick={() => restoreProgress(saved)} className="pixel-button mt-4 h-auto w-full gap-3 whitespace-normal rounded-none px-3 py-3 text-[10px] leading-relaxed"><Play className="shrink-0" aria-hidden="true" /><span className="min-w-0"><span className="block">Continue saved game</span><span className="block">Level {saved.world.level}</span></span></Button>}
           {!userId && <Button variant="ghost" onClick={async () => {
             const result = await lovable.auth.signInWithOAuth("lovable", { redirect_uri: window.location.origin });
             if (result.error) setSaveMessage("Sign-in didn't finish. Please try again.");
@@ -902,6 +950,7 @@ function swingSword(w: World) {
   if (w.swingCooldown > 0) return;
   w.swing = SWORD_SWING_SECONDS;
   w.swingCooldown = SWORD_COOLDOWN;
+  w.swingId += 1;
 }
 
 /** Drop a block right where Steve is standing. */
@@ -982,7 +1031,7 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
   }
 
   for (const e of w.enemies) {
-    const bob = e.kind === "spider" ? 0 : Math.sin(t * 2 + e.bob) * 2;
+    const bob = e.kind === "spider" || e.kind === "enderman" ? 0 : Math.sin(t * 2 + e.bob) * 2;
     shadow(e.x + e.w / 2, e.y + e.h + 6, e.w);
     ctx.save();
     ctx.translate(Math.round(e.x + e.w / 2), Math.round(e.y + bob));
@@ -992,6 +1041,19 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
       ctx.translate(0, e.h / 2); ctx.scale(swell, swell); ctx.translate(0, -e.h / 2);
     }
     ctx.drawImage(sp[e.kind], -e.w / 2, 0, e.w, e.h);
+    if (e.kind === "enderman") {
+      for (let i = 0; i < e.hp; i++) { ctx.fillStyle = "#c56af4"; ctx.fillRect(-9 + i * 8, -10, 5, 5); }
+      if (e.attackPhase === "windup") {
+        const charge = 1 - e.attackTimer / ENDERMAN_WINDUP_SECONDS;
+        ctx.fillStyle = "#f1c5ff";
+        ctx.fillRect(-e.w / 2, -18, e.w * charge, 4);
+        ctx.fillRect(-e.w / 2 - 8, e.h * 0.4, 8, 24);
+        ctx.fillRect(e.w / 2, e.h * 0.4, 8, 24);
+      } else if (e.attackPhase === "recovery") {
+        ctx.strokeStyle = "#f1c5ff"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, e.h / 2, ENDERMAN_ATTACK_RANGE * 0.55, -0.6, 0.6); ctx.stroke();
+      }
+    }
     if (e.fuse > 0 && Math.floor(e.fuse * 10) % 2 === 0) {
       ctx.globalAlpha = 0.7; ctx.fillStyle = "#ffffff"; ctx.fillRect(-e.w / 2, 0, e.w, e.h); ctx.globalAlpha = 1;
     }

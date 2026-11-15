@@ -39,16 +39,16 @@ describe("game rules", () => {
     expect(applyContact(3, "steak")).toBe(3.5);
   });
 
-  it("caps life at 16 hearts including healing at the limit", () => {
-    expect(MAX_HEARTS).toBe(16);
-    expect(clampHearts(30)).toBe(16);
-    expect(applyContact(15.5, "steak")).toBe(16);
-    expect(applyContact(16, "steak")).toBe(16);
-    expect(applyContact(16, "skeleton")).toBe(15.5);
+  it("caps life at 14 hearts including healing at the limit", () => {
+    expect(MAX_HEARTS).toBe(14);
+    expect(clampHearts(30)).toBe(14);
+    expect(applyContact(13.5, "steak")).toBe(14);
+    expect(applyContact(14, "steak")).toBe(14);
+    expect(applyContact(14, "skeleton")).toBe(13.5);
   });
 
-  it("allocates eight hearts per row for two rows at maximum life", () => {
-    expect(HEARTS_PER_ROW).toBe(8);
+  it("allocates seven hearts per row for two rows at maximum life", () => {
+    expect(HEARTS_PER_ROW).toBe(7);
     expect(MAX_HEARTS / HEARTS_PER_ROW).toBe(2);
   });
 
@@ -64,9 +64,13 @@ describe("game rules", () => {
     expect(applyContact(0.5, "creeper")).toBe(0);
   });
 
-  it("night length stays fixed across levels", () => {
+  it("night length grows one second per level from 20 seconds without a later cap", () => {
     expect(levelConfig(1, DEFAULT_SETTINGS).nightDuration).toBe(20);
-    expect(levelConfig(6, DEFAULT_SETTINGS).nightDuration).toBe(20);
+    expect(levelConfig(2, DEFAULT_SETTINGS).nightDuration).toBe(21);
+    expect(levelConfig(6, DEFAULT_SETTINGS).nightDuration).toBe(25);
+    expect(levelConfig(11, DEFAULT_SETTINGS).nightDuration).toBe(30);
+    expect(levelConfig(22, DEFAULT_SETTINGS).nightDuration).toBe(41);
+    expect(levelConfig(50, DEFAULT_SETTINGS).nightDuration).toBe(69);
   });
 
   it("wood lasts 2 hits, stone 4, iron 6", () => {
@@ -258,8 +262,55 @@ describe("survival caps", () => {
     expect(levelConfig(9, DEFAULT_SETTINGS).enemySpeed).toBeLessThan(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
     for (const level of [11, 30, 100]) expect(levelConfig(level, DEFAULT_SETTINGS).enemySpeed).toBe(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
   });
-  it("replaces new steaks with extra blocks at 16 hearts and restores steaks below the cap", () => {
-    expect(daySupply(10, 16)).toEqual({ spawnSteaks: false, maxBlocks: 27, blockSpawnMin: 0.15, blockSpawnMax: 0.3 });
-    expect(daySupply(10, 15.5)).toEqual({ spawnSteaks: true, maxBlocks: 9, blockSpawnMin: 0.3, blockSpawnMax: 0.6 });
+  it("replaces new steaks with extra blocks at 14 hearts and restores steaks below the cap", () => {
+    expect(daySupply(10, 14)).toEqual({ spawnSteaks: false, maxBlocks: 27, blockSpawnMin: 0.15, blockSpawnMax: 0.3 });
+    expect(daySupply(10, 13.5)).toEqual({ spawnSteaks: true, maxBlocks: 9, blockSpawnMin: 0.3, blockSpawnMax: 0.6 });
+  });
+});
+
+import { remainingSteaks, endermanSpawnDelay, ENDERMAN_HP, hitEnderman, stepEnderman, mobAffectedByExplosion, type EndermanCombat } from "@/game/rules";
+describe("full health food removal", () => {
+  it("removes every existing steak at 14 hearts but retains them below the cap", () => {
+    const steaks = [{ x: 20 }, { x: 80 }];
+    expect(remainingSteaks(steaks, 14)).toEqual([]);
+    expect(remainingSteaks(steaks, 13.5)).toBe(steaks);
+  });
+});
+describe("Enderman", () => {
+  const fresh = (): EndermanCombat => ({ hp: ENDERMAN_HP, attackPhase: "chase", attackTimer: 0, lastSwordSwing: -1 });
+  it("appears only after level 10, at a random time once per night", () => {
+    expect(endermanSpawnDelay(10, 20, 0.5)).toBe(-1);
+    expect(endermanSpawnDelay(11, 20, 0)).toBe(3);
+    expect(endermanSpawnDelay(11, 20, 1)).toBe(13);
+  });
+  it("needs three separate sword strikes, not three animation frames", () => {
+    let e = hitEnderman(fresh(), 1);
+    expect(e.hp).toBe(2);
+    e = hitEnderman(e, 1);
+    expect(e.hp).toBe(2);
+    e = hitEnderman(e, 2);
+    expect(e.hp).toBe(1);
+    expect(hitEnderman(e, 3).hp).toBe(0);
+  });
+  it("is immune to explosions while normal mobs are not", () => {
+    expect(mobAffectedByExplosion("enderman")).toBe(false);
+    for (const kind of ["creeper", "skeleton", "zombie", "spider"] as const) expect(mobAffectedByExplosion(kind)).toBe(true);
+  });
+  it("winds up slowly then swipes once for two hearts", () => {
+    const windup = stepEnderman(fresh(), 60, 0.01);
+    expect(windup.state.attackPhase).toBe("windup");
+    expect(windup.state.attackTimer).toBe(1.6);
+    expect(windup.swipe).toBe(false);
+    const waiting = stepEnderman(windup.state, 60, 1.5);
+    expect(waiting.swipe).toBe(false);
+    const swipe = stepEnderman(waiting.state, 60, 0.11);
+    expect(swipe.swipe).toBe(true);
+    expect(applyContact(14, "enderman")).toBe(12);
+    expect(swipe.state.attackPhase).toBe("recovery");
+    expect(stepEnderman(swipe.state, 60, 0.3).swipe).toBe(false);
+  });
+  it("can be dodged by leaving swipe range during windup", () => {
+    const e = stepEnderman(fresh(), 60, 0).state;
+    expect(stepEnderman(e, 120, 1.6).swipe).toBe(false);
   });
 });

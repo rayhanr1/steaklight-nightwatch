@@ -1,4 +1,8 @@
 # Game updates
+- [x] Increase nights by one second per level from 20 seconds and verify resumed runs use the current duration.
+- [x] Fix saved-game level display and button overflow; verify signed-in continuation.
+- [x] Cap hearts at 14 and remove all steaks immediately at full health; verify.
+- [x] Add one random late-level Enderman with three-hit sword health, explosion immunity, and a frozen two-heart swipe windup; verify saved combat state.
 - [x] Rename the displayed game and page titles to Minecraft Survive the Night; retain repository name and deployment link.
 - [x] Make Steve speed up every three levels while enemies speed up each level until level 10; verify.
 - [x] Cap days at 20s, hearts at 16, enemy speed at level 10; replace steak spawning with extra blocks at full health; detonate TNT only on hits; verify.

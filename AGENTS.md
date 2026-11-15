@@ -35,3 +35,4 @@ use the editor.
 - Pause gates the entire simulation and animation clock; saved snapshots are validated in `src/game/progress.ts` and stored per signed-in player under Cloud RLS, so reloads restore the full run without sharing saves.
 - Block collision separation and phase-survival filtering use pure rules; enemy rebound timers are saved with backward-compatible defaults so chasing AI cannot immediately cancel shield rebounds.
 - Full-health supply decisions and hit-only TNT detonation use pure rules; saved TNT fuse values are legacy data, not simulation clocks, so older saves obey current mechanics.
+- Enderman combat uses pure state transitions and per-swing identifiers; schedule, hit count, and attack state are saved with legacy defaults to prevent duplicate spawns or frame-counted sword damage.

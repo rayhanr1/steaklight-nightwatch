@@ -12,8 +12,8 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = { enemySpeed: 5, dayDuration: 5, nightDuration: 20 };
 
 export const STARTING_HEARTS = 3;
-export const MAX_HEARTS = 16;
-export const HEARTS_PER_ROW = 8;
+export const MAX_HEARTS = 14;
+export const HEARTS_PER_ROW = 7;
 export function clampHearts(hearts: number) {
   return Math.min(MAX_HEARTS, Math.max(0, hearts));
 }
@@ -22,8 +22,8 @@ export const SKELETON_DAMAGE = 0.5;
 export const CREEPER_DAMAGE = 1;
 /** Enemies bounce off this many edges, then leave the screen on the next one. */
 export const ENEMY_MAX_BOUNCES = 2;
-/** Nights stay a fixed length; difficulty grows through mobs instead. */
-export const NIGHT_GROWTH_SECONDS = 0;
+/** Nights grow by one second per level from the configured starting length. */
+export const NIGHT_GROWTH_SECONDS = 1;
 export const NIGHT_MIN = 15;
 export const NIGHT_MAX = 30;
 /** Extra day seconds added per level. */
@@ -89,18 +89,18 @@ export function levelConfig(level: number, settings: Settings): LevelConfig {
   const n = Math.max(1, Math.floor(level)) - 1;
   return {
     dayDuration: Math.min(DAY_MAX, settings.dayDuration + n * DAY_GROWTH_SECONDS),
-    nightDuration: Math.min(NIGHT_MAX, Math.max(NIGHT_MIN, settings.nightDuration)),
+    nightDuration: Math.max(NIGHT_MIN, settings.nightDuration) + n * NIGHT_GROWTH_SECONDS,
     enemySpawnInterval: Math.max(1, 2.2 * Math.pow(0.93, n)),
     enemiesPerWave: Math.min(4, 1 + Math.floor(n / 3)),
     enemySpeed: enemySpeedPx(settings.enemySpeed) * (1 + Math.min(n, ENEMY_SPEED_MAX_LEVEL - 1) * 0.06),
   };
 }
 
-export type MobKind = "skeleton" | "creeper" | "zombie" | "spider";
+export type MobKind = "skeleton" | "creeper" | "zombie" | "spider" | "enderman";
 export type HitKind = "steak" | MobKind | "arrow";
 
 export const HIT_DELTA: Record<HitKind, number> = {
-  steak: STEAK_HEAL, skeleton: -SKELETON_DAMAGE, creeper: -CREEPER_DAMAGE, zombie: -0.5, spider: -0.5, arrow: -0.5,
+  steak: STEAK_HEAL, skeleton: -SKELETON_DAMAGE, creeper: -CREEPER_DAMAGE, zombie: -0.5, spider: -0.5, arrow: -0.5, enderman: -2,
 };
 
 export function applyContact(hearts: number, kind: HitKind) {
@@ -221,6 +221,32 @@ export const CREEPER_BLAST_RADIUS = 110;
 export const SKELETON_SHOOT_EVERY = 2.6;
 export const ARROW_SPEED = 300;
 
+// ---------- Enderman ----------
+export const ENDERMAN_HP = 3;
+export const ENDERMAN_WINDUP_SECONDS = 1.6;
+export const ENDERMAN_RECOVERY_SECONDS = 0.8;
+export const ENDERMAN_ATTACK_RANGE = 100;
+export const ENDERMAN_SPEED_MULTIPLIER = 0.8;
+export type EndermanCombat = { hp: number; attackPhase: "chase" | "windup" | "recovery"; attackTimer: number; lastSwordSwing: number };
+/** Exactly one scheduled appearance, at a random point early enough to fight it. */
+export function endermanSpawnDelay(level: number, nightSeconds: number, random: number) {
+  return level > 10 ? nightSeconds * (0.15 + Math.max(0, Math.min(1, random)) * 0.5) : -1;
+}
+export function mobAffectedByExplosion(kind: MobKind) { return kind !== "enderman"; }
+export function hitEnderman(state: EndermanCombat, swingId: number): EndermanCombat {
+  return state.lastSwordSwing === swingId ? state : { ...state, hp: Math.max(0, state.hp - 1), lastSwordSwing: swingId };
+}
+/** A single swipe at the end of the stationary windup, followed by recovery. */
+export function stepEnderman(state: EndermanCombat, distance: number, dt: number) {
+  if (state.attackPhase === "chase") {
+    return { state: distance <= ENDERMAN_ATTACK_RANGE ? { ...state, attackPhase: "windup" as const, attackTimer: ENDERMAN_WINDUP_SECONDS } : state, swipe: false };
+  }
+  const remaining = Math.max(0, state.attackTimer - dt);
+  if (remaining > 0) return { state: { ...state, attackTimer: remaining }, swipe: false };
+  if (state.attackPhase === "windup") return { state: { ...state, attackPhase: "recovery" as const, attackTimer: ENDERMAN_RECOVERY_SECONDS }, swipe: distance <= ENDERMAN_ATTACK_RANGE };
+  return { state: { ...state, attackPhase: "chase" as const, attackTimer: 0 }, swipe: false };
+}
+
 /** Turn a mover's velocity toward a target while keeping its speed. */
 export function steerToward(m: Mover, tx: number, ty: number, speed: number, turn: number, dt: number) {
   const dx = tx - (m.x + m.w / 2), dy = ty - (m.y + m.h / 2);
@@ -308,6 +334,11 @@ export function daySupply(level: number, hearts: number) {
     blockSpawnMin: RESOURCE_SPAWN_MIN * (full ? 0.5 : 1),
     blockSpawnMax: RESOURCE_SPAWN_MAX * (full ? 0.5 : 1),
   };
+}
+
+/** At the cap no food remains visible or collectible. */
+export function remainingSteaks<T>(steaks: T[], hearts: number): T[] {
+  return hearts >= MAX_HEARTS ? [] : steaks;
 }
 
 // ---------- Score ----------

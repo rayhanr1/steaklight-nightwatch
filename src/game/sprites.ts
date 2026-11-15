@@ -83,7 +83,8 @@ function render(map: string[], pal: Palette, scale: number, flip = false) {
   const c = document.createElement("canvas");
   c.width = w * scale;
   c.height = h * scale;
-  const ctx = c.getContext("2d")!;
+  const ctx = c.getContext("2d");
+  if (!ctx) return c;
   map.forEach((row, y) =>
     [...row].forEach((ch, x) => {
       const col = pal[ch];
@@ -105,6 +106,13 @@ const SPIDER = [
   "..BBBBBBBB..",".LBBBBBBBBL.","L..L....L..L","...L....L...",
 ];
 const SPIDER_PAL: Palette = { B: "#3a302a", L: "#22201c", R: "#d21f1f" };
+const ENDERMAN = [
+  "..BBBBBB..", "..BBBBBB..", "..PEBBEP..", "..BBBBBB..", "..BBBBBB..",
+  ".BBBBBBBB.", "B.BBBBBB.B", "B.BBBBBB.B", "B.BBBBBB.B", "B.BBBBBB.B",
+  "B.BBBBBB.B", "B.BBBBBB.B", "B..BB.BB.B", "B..BB.BB.B", "B..BB.BB.B",
+  "B..BB.BB.B", "B..BB.BB.B", "...BB.BB..", "...BB.BB..", "...BB.BB..", "...BB.BB..", "...BB.BB..",
+];
+const ENDERMAN_PAL: Palette = { B: "#171419", P: "#c56af4", E: "#f1c5ff" };
 const BLOCK = (a: string, b: string, c: string) => ({ A: a, B: b, C: c });
 const WOOD = ["AAAAAAAA","BBBCBBBB","AAAAAAAA","CBBBBBCB","AAAAAAAA","BBBBCBBB","AAAAAAAA","BCBBBBBB"];
 const STONE = ["AABAACAA","ABAAAAAB","AAACAAAA","BAAAABAA","AAAAAAAC","ACABAAAA","AAAAAABA","BAAACAAA"];
@@ -123,6 +131,7 @@ export function buildSprites() {
     steak: render(STEAK, STEAK_PAL, 4),
     zombie: render(ZOMBIE, ZOMBIE_PAL, 4),
     spider: render(SPIDER, SPIDER_PAL, 4),
+    enderman: render(ENDERMAN, ENDERMAN_PAL, 4),
     wood: render(WOOD, BLOCK("#b8894c", "#9a6f38", "#6e4c22"), 5),
     stone: render(STONE, BLOCK("#8d8d8d", "#6f6f6f", "#4f4f4f"), 5),
     tnt: render(TNT, { A: "#c8322a", B: "#8e1f1a", C: "#eeeeee", D: "#222222" }, 5),
@@ -138,4 +147,5 @@ export const SPRITE_SIZE = {
   steak: { w: 32, h: 32 },
   zombie: { w: 32, h: 64 },
   spider: { w: 48, h: 32 },
+  enderman: { w: 40, h: 88 },
 };
