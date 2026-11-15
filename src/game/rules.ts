@@ -12,8 +12,8 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = { enemySpeed: 5, dayDuration: 5, nightDuration: 20 };
 
 export const STARTING_HEARTS = 3;
-export const MAX_HEARTS = 14;
-export const HEARTS_PER_ROW = 7;
+export const MAX_HEARTS = 16;
+export const HEARTS_PER_ROW = 8;
 export function clampHearts(hearts: number) {
   return Math.min(MAX_HEARTS, Math.max(0, hearts));
 }

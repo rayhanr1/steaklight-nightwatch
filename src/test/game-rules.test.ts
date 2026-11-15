@@ -39,16 +39,16 @@ describe("game rules", () => {
     expect(applyContact(3, "steak")).toBe(3.5);
   });
 
-  it("caps life at 14 hearts including healing at the limit", () => {
-    expect(MAX_HEARTS).toBe(14);
-    expect(clampHearts(30)).toBe(14);
-    expect(applyContact(13.5, "steak")).toBe(14);
-    expect(applyContact(14, "steak")).toBe(14);
-    expect(applyContact(14, "skeleton")).toBe(13.5);
+  it("caps life at 16 hearts including healing at the limit", () => {
+    expect(MAX_HEARTS).toBe(16);
+    expect(clampHearts(30)).toBe(16);
+    expect(applyContact(15.5, "steak")).toBe(16);
+    expect(applyContact(16, "steak")).toBe(16);
+    expect(applyContact(16, "skeleton")).toBe(15.5);
   });
 
-  it("allocates seven hearts per row for two rows at maximum life", () => {
-    expect(HEARTS_PER_ROW).toBe(7);
+  it("allocates eight hearts per row for two rows at maximum life", () => {
+    expect(HEARTS_PER_ROW).toBe(8);
     expect(MAX_HEARTS / HEARTS_PER_ROW).toBe(2);
   });
 
@@ -262,18 +262,18 @@ describe("survival caps", () => {
     expect(levelConfig(9, DEFAULT_SETTINGS).enemySpeed).toBeLessThan(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
     for (const level of [11, 30, 100]) expect(levelConfig(level, DEFAULT_SETTINGS).enemySpeed).toBe(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
   });
-  it("replaces new steaks with extra blocks at 14 hearts and restores steaks below the cap", () => {
-    expect(daySupply(10, 14)).toEqual({ spawnSteaks: false, maxBlocks: 27, blockSpawnMin: 0.15, blockSpawnMax: 0.3 });
-    expect(daySupply(10, 13.5)).toEqual({ spawnSteaks: true, maxBlocks: 9, blockSpawnMin: 0.3, blockSpawnMax: 0.6 });
+  it("replaces new steaks with extra blocks at 16 hearts and restores steaks below the cap", () => {
+    expect(daySupply(10, 16)).toEqual({ spawnSteaks: false, maxBlocks: 27, blockSpawnMin: 0.15, blockSpawnMax: 0.3 });
+    expect(daySupply(10, 15.5)).toEqual({ spawnSteaks: true, maxBlocks: 9, blockSpawnMin: 0.3, blockSpawnMax: 0.6 });
   });
 });
 
 import { remainingSteaks, endermanSpawnDelay, ENDERMAN_HP, hitEnderman, stepEnderman, mobAffectedByExplosion, type EndermanCombat } from "@/game/rules";
 describe("full health food removal", () => {
-  it("removes every existing steak at 14 hearts but retains them below the cap", () => {
+  it("removes every existing steak at 16 hearts but retains them below the cap", () => {
     const steaks = [{ x: 20 }, { x: 80 }];
-    expect(remainingSteaks(steaks, 14)).toEqual([]);
-    expect(remainingSteaks(steaks, 13.5)).toBe(steaks);
+    expect(remainingSteaks(steaks, 16)).toEqual([]);
+    expect(remainingSteaks(steaks, 15.5)).toBe(steaks);
   });
 });
 describe("Enderman", () => {
