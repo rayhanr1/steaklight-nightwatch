@@ -34,3 +34,4 @@ use the editor.
 - Characters and steaks are pixel maps drawn to canvas in `src/game/sprites.ts`, not image files, so they stay crisp at any scale.
 - Pause gates the entire simulation and animation clock; saved snapshots are validated in `src/game/progress.ts` and stored per signed-in player under Cloud RLS, so reloads restore the full run without sharing saves.
 - Block collision separation and phase-survival filtering use pure rules; enemy rebound timers are saved with backward-compatible defaults so chasing AI cannot immediately cancel shield rebounds.
+- Full-health supply decisions and hit-only TNT detonation use pure rules; saved TNT fuse values are legacy data, not simulation clocks, so older saves obey current mechanics.

@@ -12,8 +12,8 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = { enemySpeed: 5, dayDuration: 5, nightDuration: 20 };
 
 export const STARTING_HEARTS = 3;
-export const MAX_HEARTS = 18;
-export const HEARTS_PER_ROW = 9;
+export const MAX_HEARTS = 16;
+export const HEARTS_PER_ROW = 8;
 export function clampHearts(hearts: number) {
   return Math.min(MAX_HEARTS, Math.max(0, hearts));
 }
@@ -28,6 +28,8 @@ export const NIGHT_MIN = 15;
 export const NIGHT_MAX = 30;
 /** Extra day seconds added per level. */
 export const DAY_GROWTH_SECONDS = 1;
+export const DAY_MAX = 20;
+export const ENEMY_SPEED_MAX_LEVEL = 10;
 /** Max steaks on screen at once. */
 export const STEAK_MAX_ON_SCREEN = 6;
 /** Seconds between steak spawns (random between min and max). */
@@ -86,11 +88,11 @@ export function steveSpeed(level: number) {
 export function levelConfig(level: number, settings: Settings): LevelConfig {
   const n = Math.max(1, Math.floor(level)) - 1;
   return {
-    dayDuration: settings.dayDuration + n * DAY_GROWTH_SECONDS,
+    dayDuration: Math.min(DAY_MAX, settings.dayDuration + n * DAY_GROWTH_SECONDS),
     nightDuration: Math.min(NIGHT_MAX, Math.max(NIGHT_MIN, settings.nightDuration)),
     enemySpawnInterval: Math.max(1, 2.2 * Math.pow(0.93, n)),
     enemiesPerWave: Math.min(4, 1 + Math.floor(n / 3)),
-    enemySpeed: enemySpeedPx(settings.enemySpeed) * (1 + Math.min(n, 10) * 0.06),
+    enemySpeed: enemySpeedPx(settings.enemySpeed) * (1 + Math.min(n, ENEMY_SPEED_MAX_LEVEL - 1) * 0.06),
   };
 }
 
@@ -246,8 +248,10 @@ export function swordHits(steve: Box, facing: 1 | -1, target: Box) {
 // ---------- Blocks ----------
 export type BlockKind = "wood" | "stone" | "iron" | "tnt";
 export const BLOCK_SIZE = 40;
-/** Placed TNT is not an obstacle; it explodes this long after being placed. */
-export const TNT_FUSE_SECONDS = 1;
+/** TNT has no timed fuse; only a hit can detonate it. */
+export function tntDetonates(block: { kind: BlockKind; hp: number }) {
+  return block.kind === "tnt" && block.hp > 0 && block.hp < TNT_HP;
+}
 export const TNT_BLAST_RADIUS = 130;
 export const TNT_FROM_LEVEL = 5;
 /** Large so hits never remove TNT; any hit just shortens its fuse. */
@@ -293,6 +297,18 @@ export const RESOURCE_MAX_ON_SCREEN = 9;
 /** Seconds between block spawns by day (random between min and max). */
 export const RESOURCE_SPAWN_MIN = 0.3;
 export const RESOURCE_SPAWN_MAX = 0.6;
+
+/** Redirect food supply into building resources while Steve is at full health. */
+export function daySupply(level: number, hearts: number) {
+  const full = hearts >= MAX_HEARTS;
+  const steaks = steakConfig(level);
+  return {
+    spawnSteaks: !full,
+    maxBlocks: RESOURCE_MAX_ON_SCREEN + (full ? steaks.maxOnScreen : 0),
+    blockSpawnMin: RESOURCE_SPAWN_MIN * (full ? 0.5 : 1),
+    blockSpawnMax: RESOURCE_SPAWN_MAX * (full ? 0.5 : 1),
+  };
+}
 
 // ---------- Score ----------
 export const SCORE_PER_LEVEL = 100;

@@ -1,4 +1,5 @@
 # Game updates
+- [x] Cap days at 20s, hearts at 16, enemy speed at level 10; replace steak spawning with extra blocks at full health; detonate TNT only on hits; verify.
 - [x] Shift enemy speed up one step, retain surviving blocks, double durability, strengthen repulsion, and increase daytime block supply; verify.
 - [x] Cap life at 18 hearts, display nine hearts per row, and verify saved life normalization and healing.
 - [x] Stabilize the day forest video and remove night camera drift.

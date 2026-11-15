@@ -39,16 +39,16 @@ describe("game rules", () => {
     expect(applyContact(3, "steak")).toBe(3.5);
   });
 
-  it("caps life at 18 hearts including healing at the limit", () => {
-    expect(MAX_HEARTS).toBe(18);
-    expect(clampHearts(30)).toBe(18);
-    expect(applyContact(17.5, "steak")).toBe(18);
-    expect(applyContact(18, "steak")).toBe(18);
-    expect(applyContact(18, "skeleton")).toBe(17.5);
+  it("caps life at 16 hearts including healing at the limit", () => {
+    expect(MAX_HEARTS).toBe(16);
+    expect(clampHearts(30)).toBe(16);
+    expect(applyContact(15.5, "steak")).toBe(16);
+    expect(applyContact(16, "steak")).toBe(16);
+    expect(applyContact(16, "skeleton")).toBe(15.5);
   });
 
-  it("allocates nine hearts per row for two rows at maximum life", () => {
-    expect(HEARTS_PER_ROW).toBe(9);
+  it("allocates eight hearts per row for two rows at maximum life", () => {
+    expect(HEARTS_PER_ROW).toBe(8);
     expect(MAX_HEARTS / HEARTS_PER_ROW).toBe(2);
   });
 
@@ -179,7 +179,7 @@ describe("high score", () => {
   });
 });
 
-import { RESOURCE_MAX_ON_SCREEN, STEAK_MAX_ON_SCREEN, TNT_FUSE_SECONDS, steakConfig } from "@/game/rules";
+import { RESOURCE_MAX_ON_SCREEN, STEAK_MAX_ON_SCREEN, tntDetonates, TNT_HP, daySupply, steakConfig } from "@/game/rules";
 describe("steak supply", () => {
   it("reduces steak counts and slows spawning while preserving level growth", () => {
     expect(steakConfig(1)).toEqual({ maxOnScreen: 6, spawnMin: 0.9, spawnMax: 1.8 });
@@ -226,12 +226,32 @@ describe("tnt and block supply", () => {
     expect(resourceKindsForLevel(4)).not.toContain("tnt");
     expect(resourceKindsForLevel(5)).toContain("tnt");
   });
-  it("tnt explodes 1 second after placing", () => {
-    expect(TNT_FUSE_SECONDS).toBe(1);
+  it("tnt only detonates after a hit, not because time passes", () => {
+    expect(tntDetonates({ kind: "tnt", hp: TNT_HP })).toBe(false);
+    expect(tntDetonates({ kind: "tnt", hp: hitBlock(TNT_HP) })).toBe(true);
+    expect(tntDetonates({ kind: "tnt", hp: 0 })).toBe(false);
+    expect(tntDetonates({ kind: "wood", hp: 1 })).toBe(false);
   });
   it("more blocks can float by during the day", () => {
     expect(RESOURCE_MAX_ON_SCREEN).toBe(9);
     expect(RESOURCE_SPAWN_MIN).toBe(0.3);
     expect(RESOURCE_SPAWN_MAX).toBe(0.6);
+  });
+});
+
+describe("survival caps", () => {
+  it("caps all day cycles at 20 seconds", () => {
+    expect(levelConfig(16, DEFAULT_SETTINGS).dayDuration).toBe(20);
+    expect(levelConfig(50, DEFAULT_SETTINGS).dayDuration).toBe(20);
+    expect(levelConfig(1, { ...DEFAULT_SETTINGS, dayDuration: 120 }).dayDuration).toBe(20);
+  });
+  it("stops enemy speed growth after level 10", () => {
+    expect(levelConfig(10, DEFAULT_SETTINGS).enemySpeed).toBeCloseTo(172 * 1.54);
+    expect(levelConfig(9, DEFAULT_SETTINGS).enemySpeed).toBeLessThan(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
+    for (const level of [11, 30, 100]) expect(levelConfig(level, DEFAULT_SETTINGS).enemySpeed).toBe(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
+  });
+  it("replaces new steaks with extra blocks at 16 hearts and restores steaks below the cap", () => {
+    expect(daySupply(10, 16)).toEqual({ spawnSteaks: false, maxBlocks: 27, blockSpawnMin: 0.15, blockSpawnMax: 0.3 });
+    expect(daySupply(10, 15.5)).toEqual({ spawnSteaks: true, maxBlocks: 9, blockSpawnMin: 0.3, blockSpawnMax: 0.6 });
   });
 });

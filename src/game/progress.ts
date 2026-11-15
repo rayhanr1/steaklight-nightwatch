@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { World } from "./Game";
-import { clampHearts, type Settings } from "./rules";
+import { clampHearts, DAY_MAX, type Settings } from "./rules";
 
 const number = z.number().finite();
 const mover = z.object({ x: number, y: number, w: number.positive(), h: number.positive(), vx: number, vy: number, bounces: number, maxBounces: number, entered: z.boolean() });
 const blockKind = z.enum(["wood", "stone", "iron", "tnt"]);
-const settingsSchema = z.object({ enemySpeed: number.min(1).max(10), dayDuration: number.min(5).max(120), nightDuration: number.min(15).max(30) });
+const settingsSchema = z.object({ enemySpeed: number.min(1).max(10), dayDuration: number.min(5).max(120).transform((seconds) => Math.min(DAY_MAX, seconds)), nightDuration: number.min(15).max(30) });
 export const progressSchema = z.object({
   version: z.literal(2), settings: settingsSchema, animationTime: number.nonnegative(), videoTime: number.nonnegative(),
   world: z.object({

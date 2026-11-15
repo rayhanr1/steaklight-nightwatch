@@ -8,9 +8,12 @@ describe("pause and progress", () => {
     expect(schema.parse({ ...mob, repelTimer: 0.75 }).repelTimer).toBe(0.75);
     expect(schema.parse(mob).repelTimer).toBe(0);
   });
-  it("restores older life totals above 18 at the current cap", () => {
-    expect(progressSchema.shape.world.shape.hearts.parse(30)).toBe(18);
-    expect(progressSchema.shape.world.shape.hearts.parse(17.5)).toBe(17.5);
+  it("restores older life totals above 16 at the current cap", () => {
+    expect(progressSchema.shape.world.shape.hearts.parse(30)).toBe(16);
+    expect(progressSchema.shape.world.shape.hearts.parse(15.5)).toBe(15.5);
+  });
+  it("normalizes older day settings to the 20 second cap", () => {
+    expect(progressSchema.shape.settings.shape.dayDuration.parse(120)).toBe(20);
   });
   it("freezes simulation time until resumed", () => {
     expect(simulationDelta(true, 4)).toBe(0);

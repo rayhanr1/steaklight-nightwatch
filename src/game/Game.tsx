@@ -20,12 +20,11 @@ import {
   CREEPER_FUSE_SECONDS,
   hitBlock,
   mobKindsForLevel,
-  RESOURCE_MAX_ON_SCREEN,
-  RESOURCE_SPAWN_MAX,
   RESOURCE_SPAWN_MIN,
   TNT_BLAST_RADIUS,
-  TNT_FUSE_SECONDS,
-  TNT_HP,
+  tntDetonates,
+  daySupply,
+  DAY_MAX,
   resourceKindsForLevel,
   SKELETON_SHOOT_EVERY,
   steerToward,
@@ -336,6 +335,7 @@ export function Game() {
     const W = world.current.W, H = world.current.H;
     const restored = structuredClone(snapshot.world);
     restored.cfg = levelConfig(restored.level, snapshot.settings);
+    restored.timeLeft = Math.min(restored.timeLeft, restored.phase === "day" ? restored.cfg.dayDuration : restored.cfg.nightDuration);
     for (const object of [restored.steve, ...restored.steaks, ...restored.enemies, ...restored.resources, ...restored.blocks, ...restored.arrows, ...restored.particles, ...restored.floaters, ...restored.flashes]) {
       object.x *= W / restored.W;
       object.y *= H / restored.H;
@@ -496,11 +496,15 @@ export function Game() {
       w.swingCooldown = Math.max(0, w.swingCooldown - dt);
 
       w.timeLeft -= dt;
+      for (const b of w.blocks) {
+        if (b.kind === "tnt" && b.hp > 0 && w.swing > 0 && swordHits(s, s.facing, b)) b.hp = hitBlock(b.hp);
+      }
 
       if (w.phase === "day") {
         w.steakTimer -= dt;
         const steaks = steakConfig(w.level);
-        if (w.steakTimer <= 0 && w.steaks.length < steaks.maxOnScreen) {
+        const supply = daySupply(w.level, w.hearts);
+        if (supply.spawnSteaks && w.steakTimer <= 0 && w.steaks.length < steaks.maxOnScreen) {
           w.steakTimer = rnd(steaks.spawnMin, steaks.spawnMax);
           const m = spawnMover(w.W, w.H, SPRITE_SIZE.steak.w, SPRITE_SIZE.steak.h, rnd(130, 220), Math.floor(rnd(0, 4)));
           w.steaks.push({ ...m, spin: rnd(-2, 2) });
@@ -517,8 +521,10 @@ export function Game() {
           return true;
         });
         w.resourceTimer -= dt;
-        if (w.resourceTimer <= 0 && w.resources.length < RESOURCE_MAX_ON_SCREEN) {
-          w.resourceTimer = rnd(RESOURCE_SPAWN_MIN, RESOURCE_SPAWN_MAX);
+        const blocks = daySupply(w.level, w.hearts);
+        w.resourceTimer = Math.min(w.resourceTimer, blocks.blockSpawnMax);
+        if (w.resourceTimer <= 0 && w.resources.length < blocks.maxBlocks) {
+          w.resourceTimer = rnd(blocks.blockSpawnMin, blocks.blockSpawnMax);
           const m = spawnMover(w.W, w.H, 32, 32, rnd(110, 180), Math.floor(rnd(1, 4)));
           w.resources.push({ ...m, kind: pick(resourceKindsForLevel(w.level)) });
         }
@@ -532,6 +538,14 @@ export function Game() {
           }
           return true;
         });
+        for (const b of w.blocks) {
+          if (!tntDetonates(b)) continue;
+          b.hp = 0;
+          const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+          explode(w, bx, by);
+          for (const other of w.blocks) if (other.hp > 0 && Math.hypot(other.x + other.w / 2 - bx, other.y + other.h / 2 - by) < TNT_BLAST_RADIUS) other.hp = hitBlock(other.hp);
+        }
+        w.blocks = survivingBlocks(w.blocks);
         if (w.timeLeft <= 0) startNight();
       } else {
         w.enemyTimer -= dt;
@@ -552,18 +566,17 @@ export function Game() {
           w.floaters.push({ x: x - 10, y, text: kind === "creeper" ? "-1" : "-½", life: 1, color: "#ff5a4a" });
         };
         const blasts: { x: number; y: number; from: Enemy | null; r: number }[] = [];
-        // TNT: any hit shortens the fuse; on detonation it never hurts Steve, but cracks nearby blocks.
-        for (const b of w.blocks) {
-          if (b.kind !== "tnt" || b.hp <= 0) continue;
-          if (b.hp < TNT_HP) { b.fuse = Math.min(b.fuse, 0.12); b.hp = TNT_HP; }
-          b.fuse -= dt;
-          if (b.fuse > 0) continue;
-          const bx = b.x + b.w / 2, by = b.y + b.h / 2;
-          b.hp = 0;
-          explode(w, bx, by);
-          blasts.push({ x: bx, y: by, from: null, r: TNT_BLAST_RADIUS });
-          for (const o of w.blocks) if (o !== b && o.hp > 0 && Math.hypot(o.x + o.w / 2 - bx, o.y + o.h / 2 - by) < TNT_BLAST_RADIUS) o.hp = hitBlock(o.hp);
-        }
+        const detonateTnt = () => {
+          for (const b of w.blocks) {
+            if (!tntDetonates(b)) continue;
+            const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+            b.hp = 0;
+            explode(w, bx, by);
+            blasts.push({ x: bx, y: by, from: null, r: TNT_BLAST_RADIUS });
+            for (const o of w.blocks) if (o !== b && o.hp > 0 && Math.hypot(o.x + o.w / 2 - bx, o.y + o.h / 2 - by) < TNT_BLAST_RADIUS) o.hp = hitBlock(o.hp);
+          }
+        };
+        detonateTnt();
         w.enemies = w.enemies.filter((e) => {
           const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
           const speed = w.cfg.enemySpeed;
@@ -604,9 +617,10 @@ export function Game() {
           if (!stepMover(e, dt, w.W, w.H)) return false;
           // Placed blocks stop mobs and take a hit.
           for (const b of w.blocks) {
-            if (b.hp > 0 && b.kind !== "tnt" && overlaps(e, b, 0.05)) {
+            if (b.hp > 0 && overlaps(e, b, 0.05)) {
               b.hp = hitBlock(b.hp);
               burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 10, 150);
+              if (b.kind === "tnt") continue;
               repelFromBlock(e, b, speed);
               e.repelTimer = BLOCK_REPEL_SECONDS;
               e.fuse = 0;
@@ -628,8 +642,18 @@ export function Game() {
           }
           return true;
         });
+        w.arrows = w.arrows.filter((ar) => {
+          ar.x += ar.vx * dt; ar.y += ar.vy * dt;
+          if (ar.x < -20 || ar.y < -20 || ar.x > w.W + 20 || ar.y > w.H + 20) return false;
+          if (w.swing > 0 && swordHits(s, s.facing, ar)) return false;
+          for (const b of w.blocks) if (b.hp > 0 && overlaps(ar, b, 0)) { b.hp = hitBlock(b.hp); burst(w, ar.x, ar.y, FX[b.kind], 6, 100); return false; }
+          if (overlaps(s, ar, 0.15)) { hurt("arrow", ar.x, ar.y); w.shake = 4; return false; }
+          return true;
+        });
+        detonateTnt();
         // Creeper explosions also destroy nearby mobs (and can chain into other creepers).
         for (let i = 0; i < blasts.length; i++) {
+          detonateTnt();
           const bl = blasts[i];
           if (!bl) continue;
           w.enemies = w.enemies.filter((o) => {
@@ -640,19 +664,12 @@ export function Game() {
             if (o.kind === "creeper") {
               explode(w, ox, oy);
               blasts.push({ x: ox, y: oy, from: o, r: CREEPER_BLAST_RADIUS });
+              for (const b of w.blocks) if (b.hp > 0 && Math.hypot(b.x + b.w / 2 - ox, b.y + b.h / 2 - oy) < CREEPER_BLAST_RADIUS) b.hp = hitBlock(b.hp);
               if (Math.hypot(scx - ox, scy - oy) < CREEPER_BLAST_RADIUS) hurt("creeper", ox, o.y);
             } else burst(w, ox, oy, o.kind === "skeleton" ? FX.bone : FX.mob, 16, 220);
             return false;
           });
         }
-        w.arrows = w.arrows.filter((ar) => {
-          ar.x += ar.vx * dt; ar.y += ar.vy * dt;
-          if (ar.x < -20 || ar.y < -20 || ar.x > w.W + 20 || ar.y > w.H + 20) return false;
-          if (w.swing > 0 && swordHits(s, s.facing, ar)) return false;
-          for (const b of w.blocks) if (b.hp > 0 && b.kind !== "tnt" && overlaps(ar, b, 0)) { b.hp = hitBlock(b.hp); burst(w, ar.x, ar.y, FX[b.kind], 6, 100); return false; }
-          if (overlaps(s, ar, 0.15)) { hurt("arrow", ar.x, ar.y); w.shake = 4; return false; }
-          return true;
-        });
         w.blocks = w.blocks.filter((b) => {
           if (b.hp > 0) return true;
           if (b.kind !== "tnt") burst(w, b.x + b.w / 2, b.y + b.h / 2, FX[b.kind], 18, 220);
@@ -820,7 +837,7 @@ export function Game() {
               label="Day length"
               value={settings.dayDuration}
               min={5}
-              max={120}
+              max={DAY_MAX}
               step={5}
               format={(v) => `${v}s`}
               onChange={(v) => setSettings((s) => ({ ...s, dayDuration: v }))}
@@ -857,7 +874,7 @@ export function Game() {
             Score: {lastScore}{newBest ? " · New high score!" : ""} · Best: {best.score}
           </p>
           <p className="mt-2 text-center text-xl leading-tight text-muted-foreground">
-            Mobs defeated: {hud.kills}. Next night: {nextNight}s with more, faster mobs{hud.level === 1 ? " and zombies" : hud.level === 2 ? " and spiders" : ""}.
+            Mobs defeated: {hud.kills}. Next night: {nextNight}s with more mobs{hud.level === 1 ? " and zombies" : hud.level === 2 ? " and spiders" : ""}.
           </p>
           <button autoFocus onClick={nextLevel} className="pixel-button mt-6 w-full px-6 py-4 text-sm uppercase">
             Next level
@@ -916,7 +933,7 @@ function placeBlock(w: World, kind: BlockKind) {
   const x = Math.round(s.x + s.w / 2 - BLOCK_SIZE / 2), y = Math.round(s.y + s.h - BLOCK_SIZE);
   if (w.blocks.some((b) => Math.abs(b.x - x) < BLOCK_SIZE * 0.6 && Math.abs(b.y - y) < BLOCK_SIZE * 0.6)) return;
   w.inventory[kind] -= 1;
-  w.blocks.push({ x, y, w: BLOCK_SIZE, h: BLOCK_SIZE, kind, hp: BLOCK_DURABILITY[kind], fuse: kind === "tnt" ? TNT_FUSE_SECONDS : 0 });
+  w.blocks.push({ x, y, w: BLOCK_SIZE, h: BLOCK_SIZE, kind, hp: BLOCK_DURABILITY[kind], fuse: 0 });
 }
 
 function burst(w: World, x: number, y: number, colors: string[], n: number, speed: number) {
@@ -957,7 +974,7 @@ function draw(ctx: CanvasRenderingContext2D, sp: SpriteSet, w: World, t: number)
   for (const b of w.blocks) {
     ctx.drawImage(sp[b.kind], b.x, b.y, b.w, b.h);
     if (b.kind === "tnt") {
-      if (Math.floor(b.fuse * 12) % 2 === 0) { ctx.globalAlpha = 0.6; ctx.fillStyle = "#ffffff"; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1; }
+      if (tntDetonates(b) && Math.floor(t * 12) % 2 === 0) { ctx.globalAlpha = 0.6; ctx.fillStyle = "#ffffff"; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1; }
       continue;
     }
     const max = BLOCK_DURABILITY[b.kind];
