@@ -211,14 +211,22 @@ describe("steak supply", () => {
 
 import { STEVE_SPEED_BASE, steveSpeed } from "@/game/rules";
 describe("steve speed", () => {
-  it("stays at base speed through level 9", () => {
-    for (const level of [1, 5, 9]) {
+  it("stays at base speed for the first three levels", () => {
+    for (const level of [1, 2, 3]) {
       expect(steveSpeed(level)).toBe(STEVE_SPEED_BASE);
     }
   });
-  it("steve gets faster from level 10, and faster each level after", () => {
-    expect(steveSpeed(10)).toBeGreaterThan(STEVE_SPEED_BASE);
-    expect(steveSpeed(11)).toBeGreaterThan(steveSpeed(10));
+  it("steve speeds up every three levels, not every level", () => {
+    for (const [level, speed] of [[4, 346.5], [5, 346.5], [6, 346.5], [7, 363], [8, 363], [9, 363], [10, 379.5], [11, 379.5], [12, 379.5], [13, 396]] as const) {
+      expect(steveSpeed(level)).toBeCloseTo(speed);
+    }
+  });
+  it("enemies still speed up every level until level 10", () => {
+    for (let level = 2; level <= 10; level++) {
+      expect(levelConfig(level, DEFAULT_SETTINGS).enemySpeed).toBeCloseTo(172 * (1 + (level - 1) * 0.06));
+      expect(levelConfig(level, DEFAULT_SETTINGS).enemySpeed).toBeGreaterThan(levelConfig(level - 1, DEFAULT_SETTINGS).enemySpeed);
+    }
+    expect(levelConfig(11, DEFAULT_SETTINGS).enemySpeed).toBe(levelConfig(10, DEFAULT_SETTINGS).enemySpeed);
   });
 });
 describe("tnt and block supply", () => {

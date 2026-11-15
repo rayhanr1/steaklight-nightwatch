@@ -1,6 +1,6 @@
 # minecraft-2d-scroller
 
-A 2D Minecraft-inspired survival game for the browser.
+**Minecraft Survive the Night** is a 2D Minecraft-inspired survival game for the browser.
 
 **Play it live: https://minecraft-2d-scroller.lovable.app**
 
@@ -15,6 +15,6 @@ A 2D Minecraft-inspired survival game for the browser.
 - Score: 100 per level cleared, 10 per mob defeated, 5 per steak. Your high score is saved.
 
 Start-menu defaults: enemy speed 5 (the former speed 6), day 5s, night 20s.
-Days grow by 1s per level up to 20s. Life is capped at 16 hearts in two rows of eight; at full health new steaks are replaced by extra blocks. Enemy speed stops growing after level 10.
+Days grow by 1s per level up to 20s. Life is capped at 16 hearts in two rows of eight; at full health new steaks are replaced by extra blocks. Enemies speed up each level until level 10. Steve gains speed every three levels (4, 7, 10, and so on).
 
 This project was built with [Lovable](https://lovable.dev).

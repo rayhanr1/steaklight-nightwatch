@@ -809,8 +809,8 @@ export function Game() {
       {/* Overlays */}
       {phase === "menu" && !paused && (
         <Overlay>
-          <h1 className="text-center font-display text-2xl leading-relaxed text-accent text-pixel-shadow sm:text-3xl">
-            Steak &amp; Survive
+          <h1 className="text-center font-display text-sm leading-relaxed text-accent text-pixel-shadow sm:text-lg">
+            Minecraft<br />Survive the Night
           </h1>
           <p className="mt-2 text-center text-2xl leading-tight text-muted-foreground">
             Eat steaks and gather blocks by day. Fight or wall off the mobs by night.

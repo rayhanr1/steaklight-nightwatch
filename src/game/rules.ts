@@ -74,15 +74,15 @@ export function enemySpeedPx(slider: number) {
 // ---------- Steve ----------
 /** Steve's base speed in px per second. */
 export const STEVE_SPEED_BASE = 330;
-/** From this level on, Steve moves faster to keep up with the mobs. */
-export const STEVE_SPEEDUP_FROM_LEVEL = 10;
-/** Extra speed per level past the speedup start, as a fraction of base speed. */
-export const STEVE_SPEEDUP_PER_LEVEL = 0.05;
+/** Steve gains speed after each group of three levels. */
+export const STEVE_SPEEDUP_EVERY_LEVELS = 3;
+/** Extra speed per step, as a fraction of base speed. */
+export const STEVE_SPEEDUP_PER_STEP = 0.05;
 
-/** Steve's speed for a level: flat through level 9, then +5% per level. */
+/** Steve's speed: +5% of base at levels 4, 7, 10, and every three levels after. */
 export function steveSpeed(level: number) {
-  const n = Math.max(0, Math.floor(level) - (STEVE_SPEEDUP_FROM_LEVEL - 1));
-  return STEVE_SPEED_BASE * (1 + n * STEVE_SPEEDUP_PER_LEVEL);
+  const n = Math.floor(Math.max(0, Math.floor(level) - 1) / STEVE_SPEEDUP_EVERY_LEVELS);
+  return STEVE_SPEED_BASE * (1 + n * STEVE_SPEEDUP_PER_STEP);
 }
 
 export function levelConfig(level: number, settings: Settings): LevelConfig {

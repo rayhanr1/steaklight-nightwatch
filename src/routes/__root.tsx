@@ -81,9 +81,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Steak & Survive" },
+      { title: "Minecraft Survive the Night" },
       { name: "description", content: "A blocky day-and-night survival game: grab steaks by day, dodge mobs by night." },
-      { property: "og:title", content: "Steak & Survive" },
+      { property: "og:title", content: "Minecraft Survive the Night" },
       { property: "og:description", content: "A blocky day-and-night survival game: grab steaks by day, dodge mobs by night." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

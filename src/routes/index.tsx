@@ -4,12 +4,12 @@ import { Game } from "@/game/Game";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Steak & Survive — blocky day and night survival game" },
+      { title: "Minecraft Survive the Night — blocky survival game" },
       {
         name: "description",
         content: "Guide Steve through a blocky forest: grab floating steaks by day, dodge skeletons and creepers by night.",
       },
-      { property: "og:title", content: "Steak & Survive" },
+      { property: "og:title", content: "Minecraft Survive the Night" },
       {
         property: "og:description",
         content: "Grab steaks by day, dodge skeletons and creepers by night. How many levels can you survive?",
