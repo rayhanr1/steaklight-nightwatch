@@ -24,7 +24,6 @@ import {
   TNT_BLAST_RADIUS,
   tntDetonates,
   daySupply,
-  DAY_MAX,
   resourceKindsForLevel,
   SKELETON_SHOOT_EVERY,
   steerToward,
@@ -832,24 +831,6 @@ export function Game() {
               format={(v) => `${v}`}
               hint={["Slow", "Fast"]}
               onChange={(v) => setSettings((s) => ({ ...s, enemySpeed: v }))}
-            />
-            <PixelSlider
-              label="Day length"
-              value={settings.dayDuration}
-              min={5}
-              max={DAY_MAX}
-              step={5}
-              format={(v) => `${v}s`}
-              onChange={(v) => setSettings((s) => ({ ...s, dayDuration: v }))}
-            />
-            <PixelSlider
-              label="Night length"
-              value={settings.nightDuration}
-              min={15}
-              max={30}
-              step={5}
-              format={(v) => `${v}s`}
-              onChange={(v) => setSettings((s) => ({ ...s, nightDuration: v }))}
             />
           </div>
           <button onClick={startGame} className="pixel-button mt-7 w-full px-6 py-4 text-sm uppercase">
